@@ -21,7 +21,7 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 print("DEBUG - Telegram token loaded:", repr(TELEGRAM_TOKEN))
 
 # ========== RAG SETUP ==========
-project_root = Path(__file__).resolve().parents[1]
+project_root = Path(__file__).resolve().parents
 persist_dir = project_root / "Knowledge_Base" / "Math106_index"
 Settings.embed_model = HuggingFaceEmbedding(model_name="intfloat/multilingual-e5-small")
 
