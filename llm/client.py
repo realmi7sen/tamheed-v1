@@ -10,7 +10,7 @@ MODEL_NAME = "claude-haiku-4-5-20251001"
 REQUEST_TIMEOUT = 60.0
 
 MAX_TOKENS_BY_LENGTH = {
-    ResponseLength.SHORT: 450,
+    ResponseLength.SHORT: 550,
     ResponseLength.NORMAL: 2000,
     ResponseLength.LONG: 4000,
 }
