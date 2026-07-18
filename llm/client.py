@@ -6,7 +6,7 @@ from utils.errors import LLMTimeoutError
 from utils.types import ResponseLength
 
 
-MODEL_NAME = "claude-sonnet-4-6"
+MODEL_NAME = "claude-haiku-4-5-20251001"
 REQUEST_TIMEOUT = 60.0
 
 MAX_TOKENS_BY_LENGTH = {
