@@ -22,3 +22,6 @@ index_storage/
 # OS files
 .DS_Store
 Thumbs.db
+
+# OneDrive
+desktop.ini
