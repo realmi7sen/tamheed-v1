@@ -10,6 +10,7 @@ from bot.greetings import GreetingHandler
 from cache.service import ResponseCache
 from database.student_profile import StudentProfileService
 from formatter.response import ResponseFormatter
+from limits.service import RateLimiter
 from llm.client import TamheedLLMClient
 from memory.service import MemoryService
 from retrieval.knowledge import KnowledgeService
@@ -41,6 +42,7 @@ def create_application():
         tool_service=ToolService(),
         display_service=DisplayService(),
         cache=ResponseCache(),
+        rate_limiter=RateLimiter(),
     )
 
     app = ApplicationBuilder().token(telegram_token).build()

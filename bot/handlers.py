@@ -6,6 +6,7 @@ from bot.greetings import GreetingHandler
 from cache.service import ResponseCache
 from database.student_profile import StudentProfileService
 from formatter.response import ResponseFormatter
+from limits.service import RateLimiter
 from llm.client import TamheedLLMClient
 from memory.service import MemoryService
 from prompts.builder import build_system_prompt, build_user_prompt
@@ -18,7 +19,7 @@ from retrieval.knowledge import KnowledgeService
 from services.display import DisplayService
 from services.tools import ToolService
 from utils.errors import DatabaseError, LLMTimeoutError, RetrievalError
-from utils.types import PromptContext
+from utils.types import PromptContext, ResponseLength, TeachingMode
 
 
 class TamheedMessageHandler:
@@ -32,6 +33,7 @@ class TamheedMessageHandler:
         tool_service: ToolService,
         display_service: DisplayService,
         cache: ResponseCache,
+        rate_limiter: RateLimiter,
     ):
         self.knowledge = knowledge_service
         self.llm = llm_client
@@ -41,12 +43,18 @@ class TamheedMessageHandler:
         self.tools = tool_service
         self.display = display_service
         self.cache = cache
+        self.limiter = rate_limiter
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_message = update.message.text
 
         if GreetingHandler.is_greeting(user_message):
             await GreetingHandler.reply(update)
+            return
+
+        denial = self.limiter.check(update.effective_user.id)
+        if denial:
+            await update.message.reply_text(denial)
             return
 
         await context.bot.send_chat_action(
@@ -75,6 +83,7 @@ class TamheedMessageHandler:
             print(f"AnthropicError: {error}")
             return
 
+        self.limiter.record(update.effective_user.id)
         for chunk in self.formatter.split(self.display.prepare(reply)):
             await update.message.reply_text(chunk)
 
@@ -89,6 +98,10 @@ class TamheedMessageHandler:
         response_goal = ResponseGoalSelector.select(teaching_mode, user_message)
         audience = AudienceSelector.select(teaching_mode)
 
+        response_length = profile.preferred_length
+        if teaching_mode == TeachingMode.QUICK:
+            response_length = ResponseLength.SHORT
+
         return PromptContext(
             user_message=user_message,
             context_text=context_text,
@@ -96,7 +109,7 @@ class TamheedMessageHandler:
             teaching_mode=teaching_mode,
             response_goal=response_goal,
             student_level=profile.level,
-            response_length=profile.preferred_length,
+            response_length=response_length,
             audience=audience,
         )
 
