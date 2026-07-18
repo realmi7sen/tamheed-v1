@@ -1,0 +1,118 @@
+from anthropic import AnthropicError
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from bot.greetings import GreetingHandler
+from cache.service import ResponseCache
+from database.student_profile import StudentProfileService
+from formatter.response import ResponseFormatter
+from llm.client import TamheedLLMClient
+from memory.service import MemoryService
+from prompts.builder import build_system_prompt, build_user_prompt
+from prompts.selectors import (
+    AudienceSelector,
+    ResponseGoalSelector,
+    TeachingModeSelector,
+)
+from retrieval.knowledge import KnowledgeService
+from services.display import DisplayService
+from services.tools import ToolService
+from utils.errors import DatabaseError, LLMTimeoutError, RetrievalError
+from utils.types import PromptContext
+
+
+class TamheedMessageHandler:
+    def __init__(
+        self,
+        knowledge_service: KnowledgeService,
+        llm_client: TamheedLLMClient,
+        profile_service: StudentProfileService,
+        response_formatter: ResponseFormatter,
+        memory_service: MemoryService,
+        tool_service: ToolService,
+        display_service: DisplayService,
+        cache: ResponseCache,
+    ):
+        self.knowledge = knowledge_service
+        self.llm = llm_client
+        self.profiles = profile_service
+        self.formatter = response_formatter
+        self.memory = memory_service
+        self.tools = tool_service
+        self.display = display_service
+        self.cache = cache
+
+    async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user_message = update.message.text
+
+        if GreetingHandler.is_greeting(user_message):
+            await GreetingHandler.reply(update)
+            return
+
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id, action="typing"
+        )
+
+        try:
+            prompt_context = await self._build_prompt_context(
+                update.effective_user.id, user_message
+            )
+            reply = await self._generate(prompt_context)
+        except RetrievalError as error:
+            await update.message.reply_text("عذراً، صار خطأ في البحث عن الحل.")
+            print(f"RetrievalError: {error}")
+            return
+        except DatabaseError as error:
+            await update.message.reply_text("عذراً، ما قدرت أوصل لملفك، جرّب بعد شوي.")
+            print(f"DatabaseError: {error}")
+            return
+        except LLMTimeoutError as error:
+            await update.message.reply_text("المحرك تأخر بالرد، جرّب مرة ثانية.")
+            print(f"LLMTimeoutError: {error}")
+            return
+        except AnthropicError as error:
+            await update.message.reply_text("عذراً، حدث خطأ في التواصل مع المحرك.")
+            print(f"AnthropicError: {error}")
+            return
+
+        for chunk in self.formatter.split(self.display.prepare(reply)):
+            await update.message.reply_text(chunk)
+
+    async def _build_prompt_context(
+        self, user_id: int, user_message: str
+    ) -> PromptContext:
+        profile = self.profiles.get_profile(user_id)
+        retrieval = await self.knowledge.search(user_message)
+        context_text = self.formatter.format_context(retrieval.context_text)
+
+        teaching_mode = TeachingModeSelector.select(user_message)
+        response_goal = ResponseGoalSelector.select(teaching_mode, user_message)
+        audience = AudienceSelector.select(teaching_mode)
+
+        return PromptContext(
+            user_message=user_message,
+            context_text=context_text,
+            source=retrieval.source,
+            teaching_mode=teaching_mode,
+            response_goal=response_goal,
+            student_level=profile.level,
+            response_length=profile.preferred_length,
+            audience=audience,
+        )
+
+    async def _generate(self, ctx: PromptContext) -> str:
+        system_prompt = build_system_prompt(ctx)
+        user_prompt = build_user_prompt(ctx)
+
+        cache_key = self.cache.make_key(system_prompt, user_prompt)
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        reply = await self.llm.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_length=ctx.response_length,
+        )
+        self.cache.set(cache_key, reply)
+        return reply
