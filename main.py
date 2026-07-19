@@ -28,7 +28,7 @@ def create_application():
     if not telegram_token:
         raise RuntimeError("TELEGRAM_TOKEN is missing. Check the .env file.")
 
-    project_root = PROJECT_DIR.parents[0]
+    project_root = PROJECT_DIR
     knowledge_service = KnowledgeService(
         persist_dir=project_root / "Knowledge_Base" / "Math106_index"
     )
@@ -48,6 +48,10 @@ def create_application():
     app = ApplicationBuilder().token(telegram_token).build()
     app.add_handler(CommandHandler("start", GreetingHandler.start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler.handle))
+    async def error_handler(update, context):
+        print(f"Error: {context.error}")
+
+    app.add_error_handler(error_handler)
     return app
 
 

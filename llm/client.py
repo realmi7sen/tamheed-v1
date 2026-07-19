@@ -39,4 +39,6 @@ class TamheedLLMClient:
             )
         except asyncio.TimeoutError as error:
             raise LLMTimeoutError("انتهت مهلة الاتصال بالنموذج.") from error
+        if not message.content or not message.content[0].text:
+              raise LLMTimeoutError("النموذج رجع رد فاضي.")
         return message.content[0].text
