@@ -15,7 +15,7 @@ class RateLimiter:
         cooldown_seconds: int = COOLDOWN_SECONDS,
         db_path: str = "tamheed.db",
     ):
-        self._daily_limit = daily_limit
+        self._daily_limit = daily_limitw
         self._cooldown = cooldown_seconds
         self.db = TamheedDB(db_path)
 
