@@ -22,6 +22,42 @@ from utils.errors import DatabaseError, LLMTimeoutError, RetrievalError
 from utils.types import PromptContext, ResponseLength, TeachingMode
 
 
+MEMORY_WINDOW_SECONDS = 20*60
+MEMORY_WINDOW_CHARS = 1000
+
+FOLLOWUP_ROOTS = (
+    "كمل", "أكمل", "اكمل",
+    "وضح", "وضّح",
+    "فهم",
+    "ليش", "لماذا",
+    "زياد", "أكثر", "اكثر",
+    "بعده", "بعدها",
+    "يعني",
+    "ثاني", "اعد", "أعد",
+    "كلم",                      # تتكلم / كلامك / تكلمت
+    "قصد",                      # قصدك / وش تقصد
+    "فوق",                      # اللي فوق / الكلام فوق
+    "قبل",                      # اللي قبل / قبل شوي
+    "هذا", "هذي", "ذا",         # وش هذا / هذي كيف
+    "نفس",                      # نفس الشي / نفس المسألة
+    "بسّط", "بسط",              # بسّطها
+    "كرر", "عيد",               # كررها / عيدها
+    "مثال",                     # أعطني مثال (على السابق)
+    "طيب", "طب",                # طيب وبعد
+    "وش",                       # وش يعني / وش هذا — متابعة قصيرة شائعة
+)
+
+
+def is_followup(text: str) -> bool:
+    words = text.split()
+    for word in words:
+        clean = word.strip("؟?.,!:؛\"'()")
+        for root in FOLLOWUP_ROOTS:
+            if clean.startswith(root):
+                return True
+    return False
+
+
 class TamheedMessageHandler:
     def __init__(
         self,
@@ -44,9 +80,19 @@ class TamheedMessageHandler:
         self.display = display_service
         self.cache = cache
         self.limiter = rate_limiter
+        self.db = rate_limiter.db
 
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_message = update.message.text
+        
+        if len(user_message) > MEMORY_WINDOW_CHARS:
+           await update.message.reply_text(
+                "رسالتك طويلة شوي 😅 اختصر سؤالك أو قسّمه لأجزاء، "
+                "وأنا بساعدك ."
+            )
+           return 
+        
+            
 
         if GreetingHandler.is_greeting(user_message):
             await GreetingHandler.reply(update)
@@ -61,11 +107,18 @@ class TamheedMessageHandler:
             chat_id=update.effective_chat.id, action="typing"
         )
 
+        user_id = update.effective_user.id
+        use_memory = is_followup(user_message) and (
+            self.limiter.seconds_since_last(user_id) <= MEMORY_WINDOW_SECONDS
+        )
+
         try:
             prompt_context = await self._build_prompt_context(
-                update.effective_user.id, user_message
+                user_id, user_message
             )
-            reply = await self._generate(prompt_context)
+            reply = await self._generate(
+                prompt_context, user_id=user_id, use_memory=use_memory
+            )
         except RetrievalError as error:
             await update.message.reply_text("عذراً، صار خطأ في البحث عن الحل.")
             print(f"RetrievalError: {error}")
@@ -83,9 +136,21 @@ class TamheedMessageHandler:
             print(f"AnthropicError: {error}")
             return
 
-        self.limiter.record(update.effective_user.id)
+        self.limiter.record(user_id)
+
+        self.db.conversation_add(user_id, "user", user_message)
+        self.db.conversation_add(user_id, "assistant", reply)
+        self.db.conversation_clear_old(user_id, keep_count=50)
+
         for chunk in self.formatter.split(self.display.prepare(reply)):
             await update.message.reply_text(chunk)
+
+    async def clear_memory(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        user_id = update.effective_user.id
+        self.db.conversation_clear_old(user_id, keep_count=0)
+        await update.message.reply_text("تمام، بدينا من جديد ✨ اسأل اللي تبي.")
 
     async def _build_prompt_context(
         self, user_id: int, user_message: str
@@ -113,19 +178,29 @@ class TamheedMessageHandler:
             audience=audience,
         )
 
-    async def _generate(self, ctx: PromptContext) -> str:
+    async def _generate(
+        self, ctx: PromptContext, user_id: int, use_memory: bool
+    ) -> str:
         system_prompt = build_system_prompt(ctx)
         user_prompt = build_user_prompt(ctx)
 
-        cache_key = self.cache.make_key(system_prompt, user_prompt)
-        cached = self.cache.get(cache_key)
-        if cached is not None:
-            return cached
+        history = []
+        if use_memory:
+            history = self.db.conversation_get_recent(user_id, limit=6)
+
+        if not use_memory:
+            cache_key = self.cache.make_key(system_prompt, user_prompt)
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                return cached
 
         reply = await self.llm.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_length=ctx.response_length,
+            history=history,
         )
-        self.cache.set(cache_key, reply)
+
+        if not use_memory:
+            self.cache.set(cache_key, reply)
         return reply

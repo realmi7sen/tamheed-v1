@@ -47,7 +47,9 @@ def create_application():
 
     app = ApplicationBuilder().token(telegram_token).build()
     app.add_handler(CommandHandler("start", GreetingHandler.start))
+    app.add_handler(CommandHandler("new", handler.clear_memory))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler.handle))
+
     async def error_handler(update, context):
         print(f"Error: {context.error}")
 

@@ -15,7 +15,7 @@ class RateLimiter:
         cooldown_seconds: int = COOLDOWN_SECONDS,
         db_path: str = "tamheed.db",
     ):
-        self._daily_limit = daily_limitw
+        self._daily_limit = daily_limit
         self._cooldown = cooldown_seconds
         self.db = TamheedDB(db_path)
 
@@ -23,7 +23,7 @@ class RateLimiter:
         """يرجع None إذا مسموح، أو رسالة رفض."""
         now = time.time()
         today = int(now // 86400)
-        
+
         usage = self.db.usage_get(user_id, today)
         count = usage["count"]
         last_ts = usage["last_message_ts"]
@@ -41,3 +41,13 @@ class RateLimiter:
         now = time.time()
         today = int(now // 86400)
         self.db.usage_increment(user_id, today, now)
+
+    def seconds_since_last(self, user_id: int) -> float:
+        """كم ثانية مرت من آخر رسالة — للنافذة الزمنية للذاكرة."""
+        now = time.time()
+        today = int(now // 86400)
+        usage = self.db.usage_get(user_id, today)
+        last_ts = usage["last_message_ts"]
+        if last_ts == 0:
+            return float("inf")
+        return now - last_ts

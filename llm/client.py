@@ -25,20 +25,25 @@ class TamheedLLMClient:
         system_prompt: str,
         user_prompt: str,
         response_length: ResponseLength,
+        history: list | None = None,
     ) -> str:
         max_tokens = MAX_TOKENS_BY_LENGTH.get(response_length, 2000)
+
+        messages = list(history) if history else []
+        messages.append({"role": "user", "content": user_prompt})
+
         try:
             message = await asyncio.wait_for(
                 self._client.messages.create(
                     model=MODEL_NAME,
                     max_tokens=max_tokens,
                     system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}],
+                    messages=messages,
                 ),
                 timeout=REQUEST_TIMEOUT,
             )
         except asyncio.TimeoutError as error:
             raise LLMTimeoutError("انتهت مهلة الاتصال بالنموذج.") from error
         if not message.content or not message.content[0].text:
-              raise LLMTimeoutError("النموذج رجع رد فاضي.")
+            raise LLMTimeoutError("النموذج رجع رد فاضي.")
         return message.content[0].text
