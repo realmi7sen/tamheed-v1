@@ -51,6 +51,14 @@ class TamheedDB:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS media_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    media_type TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             conn.commit()
 
     @contextmanager
@@ -96,37 +104,39 @@ class TamheedDB:
 
     # ===== USAGE (الحد اليومي) =====
     def usage_get(self, user_id: int, day: int) -> dict:
-        """استرجع عداد الاستخدام لمستخدم في يوم معين."""
+        """استرجع عداد اليوم — إذا اليوم تغيّر نعتبر العدّاد صفر."""
         with self.connection() as conn:
             row = conn.execute(
-                "SELECT count, last_message_ts FROM user_usage WHERE user_id = ? AND day = ?",
-                (user_id, day),
+                "SELECT day, count, last_message_ts FROM user_usage WHERE user_id = ?",
+                (user_id,),
             ).fetchone()
-            if row:
-                return {
-                    "count": row["count"],
-                    "last_message_ts": row["last_message_ts"],
-                }
-            return {"count": 0, "last_message_ts": 0.0}
+            if row and row["day"] == day:
+                return {"count": row["count"], "last_message_ts": row["last_message_ts"]}
+            # يوم جديد أو مستخدم جديد
+            return {"count": 0, "last_message_ts": row["last_message_ts"] if row else 0.0}
 
     def usage_increment(self, user_id: int, day: int, ts: float) -> None:
-        """زيادة عداد الأسئلة وتحديث آخر وقت."""
+        """زد العدّاد لليوم الحالي، أو صفّره لو اليوم تغيّر."""
         with self.connection() as conn:
-            # تحقق إذا الصف موجود
             existing = conn.execute(
-                "SELECT count FROM user_usage WHERE user_id = ? AND day = ?",
-                (user_id, day),
+                "SELECT day FROM user_usage WHERE user_id = ?",
+                (user_id,),
             ).fetchone()
 
-            if existing:
-                conn.execute(
-                    "UPDATE user_usage SET count = count + 1, last_message_ts = ? WHERE user_id = ? AND day = ?",
-                    (ts, user_id, day),
-                )
-            else:
+            if existing is None:
                 conn.execute(
                     "INSERT INTO user_usage (user_id, day, count, last_message_ts) VALUES (?, ?, 1, ?)",
                     (user_id, day, ts),
+                )
+            elif existing["day"] != day:
+                conn.execute(
+                    "UPDATE user_usage SET day = ?, count = 1, last_message_ts = ? WHERE user_id = ?",
+                    (day, ts, user_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE user_usage SET count = count + 1, last_message_ts = ? WHERE user_id = ?",
+                    (ts, user_id),
                 )
             conn.commit()
 
@@ -206,3 +216,13 @@ class TamheedDB:
         with self.connection() as conn:
             rows = conn.execute("SELECT * FROM videos ORDER BY published_week").fetchall()
             return [dict(row) for row in rows]
+
+    # ===== MEDIA LOG =====
+    def log_media(self, user_id: int, media_type: str) -> None:
+        """سجّل محاولة إرسال وسائط — بيانات لقرار دعم الصوت لاحقًا."""
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT INTO media_log (user_id, media_type) VALUES (?, ?)",
+                (user_id, media_type),
+            )
+            conn.commit()

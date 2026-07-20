@@ -152,6 +152,25 @@ class TamheedMessageHandler:
         self.db.conversation_clear_old(user_id, keep_count=0)
         await update.message.reply_text("تمام، بدينا من جديد ✨ اسأل اللي تبي.")
 
+    async def handle_media(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        msg = update.message
+        media_type = (
+            "voice" if msg.voice
+            else "photo" if msg.photo
+            else "document" if msg.document
+            else "video" if msg.video
+            else "other"
+        )
+        try:
+            self.db.log_media(update.effective_user.id, media_type)
+        except Exception:
+            pass
+        await msg.reply_text("حالياً أستقبل أسئلة نصية بس 🙏 اكتب سؤالك وأنا حاضر")
+        
+        
+
     async def _build_prompt_context(
         self, user_id: int, user_message: str
     ) -> PromptContext:

@@ -30,7 +30,8 @@ def create_application():
 
     project_root = PROJECT_DIR
     knowledge_service = KnowledgeService(
-        persist_dir=project_root / "Knowledge_Base" / "Math106_index"
+        persist_dir=project_root / "Knowledge_Base" / "Math106_index",
+        top_k=3,
     )
     response_formatter = ResponseFormatter()
     handler = TamheedMessageHandler(
@@ -49,6 +50,7 @@ def create_application():
     app.add_handler(CommandHandler("start", GreetingHandler.start))
     app.add_handler(CommandHandler("new", handler.clear_memory))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler.handle))
+    app.add_handler(MessageHandler(filters.VOICE | filters.PHOTO | filters.Document.ALL | filters.VIDEO, handler.handle_media))
 
     async def error_handler(update, context):
         print(f"Error: {context.error}")

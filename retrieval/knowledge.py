@@ -31,7 +31,16 @@ class KnowledgeService:
         except Exception as error:
             raise RetrievalError(str(error)) from error
 
-        top = nodes[0] if nodes else None
+        # استبعد نتائج الاختبارات غير المتحقق منها قبل أي قرار
+        valid = [
+            n for n in nodes
+            if not (
+                n.metadata.get("doc_type", "") == "exam"
+                and not n.metadata.get("coverage_verified", False)
+            )
+        ]
+
+        top = valid[0] if valid else None
         score = float(getattr(top, "score", 0) or 0) if top else 0.0
 
         if not top or score < MATCH_THRESHOLD:
@@ -40,6 +49,25 @@ class KnowledgeService:
                 source=SourceType.CONCEPTUAL,
                 score=score,
             )
+
+        # ضم النتائج القريبة من الأفضل (فرق ≤ 0.05) كسياق إضافي — بحد أقصى نتيجتين إضافيتين
+        context_parts = [top.text]
+        for n in valid[1:3]:
+            n_score = float(getattr(n, "score", 0) or 0)
+            if n_score >= MATCH_THRESHOLD and (score - n_score) <= 0.05:
+                context_parts.append(n.text)
+
+        source = (
+            SourceType.MATCHED_SOLUTION
+            if score >= STRONG_MATCH_THRESHOLD
+            else SourceType.SIMILAR_TECHNIQUE
+        )
+        return RetrievalResult(
+            context_text="\n\n---\n\n".join(context_parts),
+            source=source,
+            score=score,
+            technique_name=top.metadata.get("technique", ""),
+        )
 
         doc_type = top.metadata.get("doc_type", "")
         coverage_verified = top.metadata.get("coverage_verified", False)

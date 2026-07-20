@@ -44,6 +44,34 @@ _LATEX_SYMBOLS = {
     r"\,": " ",
 }
 
+# ===== Dialect cleanup =====
+# انهيار اللهجة: Haiku يفلت كلمات غير سعودية في الردود الطويلة
+# رغم منع الـ prompt. الحل البرمجي مضمون؛ الـ prompt مزاجي.
+_DIALECT_FIXES = {
+    "شنو": "وش",
+    "هسع": "الحين",
+    "هسه": "الحين",
+    "دلوقتي": "الحين",
+    "إزاي": "كيف",
+    "ازاي": "كيف",
+    "كده": "كذا",
+    "كدة": "كذا",
+    "تاني": "مرة ثانية",
+    "ايه": "وش",
+    "إيه": "وش",
+    "عايز": "تبغى",
+    "عاوز": "تبغى",
+    "بدي": "أبغى",
+    "شو": "وش",
+}
+
+# نطابق الكلمة كاملة فقط — الحدود = حرف عربي/لاتيني قبل أو بعد يمنع التطابق
+_DIALECT_PATTERN = re.compile(
+    r"(?<![\w\u0600-\u06FF])("
+    + "|".join(map(re.escape, sorted(_DIALECT_FIXES, key=len, reverse=True)))
+    + r")(?![\w\u0600-\u06FF])"
+)
+
 
 def _clean_latex(text: str) -> str:
     text = _FRAC.sub(r"(\1)/(\2)", text)
@@ -57,6 +85,10 @@ def _clean_latex(text: str) -> str:
     return text
 
 
+def _clean_dialect(text: str) -> str:
+    return _DIALECT_PATTERN.sub(lambda m: _DIALECT_FIXES[m.group(1)], text)
+
+
 def _convert_table_row(line: str) -> str:
     cells = [c.strip() for c in line.strip().strip("|").split("|")]
     cells = [c for c in cells if c]
@@ -67,11 +99,17 @@ def clean_markdown(text: str) -> str:
     # LaTeX أولًا: نحوّل \frac و \sqrt والرموز قبل أي شي
     text = _clean_latex(text)
 
+    # اللهجة: استبدال الكلمات الغريبة بالسعودي — بعد LaTeX عشان النص يكون نظيف
+    text = _clean_dialect(text)
+
     # جداول: صف الفواصل يُحذف، وكل صف يتحول لسطر «خلية ← خلية»
     text = _TABLE_SEP.sub("", text)
     lines = []
     for line in text.split("\n"):
-        if line.count("|") >= 2:
+        # صف جدول حقيقي: يبدأ بـ | أو الأنبوب محاط بمسافات (يميّز الجدول عن |x|)
+        stripped = line.strip()
+        is_table_row = stripped.startswith("|") or " | " in line
+        if is_table_row and line.count("|") >= 2:
             lines.append(_convert_table_row(line))
         else:
             lines.append(line)
