@@ -145,6 +145,10 @@ class TamheedMessageHandler:
         for chunk in self.formatter.split(self.display.prepare(reply)):
             await update.message.reply_text(chunk)
 
+
+
+
+
     async def clear_memory(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
