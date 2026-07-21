@@ -30,12 +30,39 @@ Settings.node_parser = SentenceSplitter(chunk_size=8192, chunk_overlap=0)
 # ========= METADATA =========
 
 SECTION_TECHNIQUES = {
+    # Chapter 4
+    "4_1": "Antiderivatives and indefinite integrals",
+    "4_2": "Change of variables in indefinite integrals",
+    "4_3": "Summation notation and area",
+    "4_4": "The definite integral",
+    "4_5": "Properties of definite integral",
+    "4_6": "The fundamental theorem of calculus",
+    "4_7": "Numerical integration",
+    # Chapter 6
+    "6_2": "The natural logarithm function",
+    "6_3": "The exponential function",
+    "6_4": "Integration using natural logarithm and exponential function",
+    "6_5": "General exponential function and logarithm function",
+    "6_7": "Inverse trigonometric functions",
+    "6_8": "Hyperbolic and inverse hyperbolic functions",
+    "6_9": "Indeterminate forms and L'Hopital's rule",
+    # Chapter 7
     "7_1": "التكامل بالتجزئة",
     "7_2": "تكاملات الدوال المثلثية",
     "7_3": "التعويض المثلثي",
     "7_4": "الكسور الجزئية",
     "7_5": "تكاملات متنوعة",
     "7_7": "التكاملات المعتلة",
+    # Chapter 5
+    "5_1": "Area between curves",
+    "5_2": "Volume by disk or washer method",
+    "5_3": "Volume by cylindrical shells method",
+    "5_5": "Arc length and surface of revolution",
+    # Chapter 9
+    "9_1": "Parametric equations",
+    "9_2": "Arc length and surface area",
+    "9_3": "Polar coordinates",
+    "9_4": "Integrals in polar coordinates",
 }
 
 
@@ -55,10 +82,11 @@ def file_metadata(file_path: str) -> dict:
         meta["doc_type"] = "section"
         meta["coverage_verified"] = True
 
-    match = re.search(r"7[_.]\d", path.name.replace(".", "_"))
+    # تم تحديث الـ regex ليغطي الفصول المطلوبة للفاينل: 4, 5, 6, 7, 9
+    match = re.search(r"[45679][_.]\d", path.name.replace(".", "_"))
     if not match:
         for part in parts_lower:
-            m = re.search(r"7[_.]\d", part.replace(".", "_"))
+            m = re.search(r"[45679][_.]\d", part.replace(".", "_"))
             if m:
                 match = m
                 break
