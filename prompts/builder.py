@@ -48,15 +48,14 @@ TEACHING_MODE_RULES = {
     TeachingMode.EXPLAIN: "استخدم شرحًا متوازنًا: خريطة مفهوم قصيرة ثم خطوات واضحة.",
 }
 
-MEMORY_RULES = ""
+MEMORY_RULES = """إذا كان تاريخ المحادثة يظهر أنك شرحت هذا المثال أو الفكرة قبل قليل، لا تكرره حرفيًا أو بصياغة مختلفة لنفس المعنى. اختر واحدًا: اشرح بزاوية جديدة كليًا (تشبيه، رسم ذهني، حالة خاصة مختلفة)، أو اسأل الطالب سؤال توضيح دقيق عن أي جزء بالضبط ما فهمه."""
 TOOL_RULES = ""
 DISPLAY_RULES = ""
 
 
-def build_system_prompt(ctx: PromptContext) -> str:
-    """يجمع BASE_PROMPT الثابت مع القواعد المتغيرة حسب PromptContext."""
-    rules = [
-        BASE_PROMPT,
+def build_system_prompt(ctx: PromptContext) -> tuple[str, str]:
+    """يرجع (الجزء الثابت، الجزء المتغير) — منفصلين عشان الكاش."""
+    variable_rules = [
         TEACHING_MODE_RULES[ctx.teaching_mode],
         EVIDENCE_RULES[ctx.source],
         STUDENT_LEVEL_RULES[ctx.student_level],
@@ -67,7 +66,8 @@ def build_system_prompt(ctx: PromptContext) -> str:
         TOOL_RULES,
         DISPLAY_RULES,
     ]
-    return "\n\n".join(rule for rule in rules if rule)
+    variable_text = "\n\n".join(rule for rule in variable_rules if rule)
+    return BASE_PROMPT, variable_text
 
 
 def build_user_prompt(ctx: PromptContext) -> str:

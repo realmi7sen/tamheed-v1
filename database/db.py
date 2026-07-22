@@ -139,6 +139,17 @@ class TamheedDB:
                     (ts, user_id),
                 )
             conn.commit()
+            
+    def active_users_last_minutes(self, minutes: int = 5) -> int:
+        """عدد المستخدمين النشطين خلال آخر N دقيقة.
+        ملاحظة: user_usage صف واحد لكل مستخدم، فهذا عدد مستخدمين لا عدد طلبات."""
+        cutoff = datetime.now().timestamp() - minutes * 60
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM user_usage WHERE last_message_ts >= ?",
+                (cutoff,),
+            ).fetchone()
+            return row[0] if row else 0
 
     # ===== CONVERSATIONS (الذاكرة) =====
     def conversation_add(self, user_id: int, role: str, content: str) -> None:
@@ -157,7 +168,7 @@ class TamheedDB:
                 """
                 SELECT role, content FROM conversations 
                 WHERE user_id = ? 
-                ORDER BY created_at DESC 
+                ORDER BY id DESC 
                 LIMIT ?
                 """,
                 (user_id, limit),
@@ -174,7 +185,7 @@ class TamheedDB:
                 WHERE user_id = ? AND id NOT IN (
                     SELECT id FROM conversations 
                     WHERE user_id = ? 
-                    ORDER BY created_at DESC 
+                    ORDER BY id DESC 
                     LIMIT ?
                 )
                 """,

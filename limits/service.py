@@ -4,6 +4,8 @@ from database.db import TamheedDB
 
 DAILY_QUESTION_LIMIT = 30
 COOLDOWN_SECONDS = 10
+CACHE_THRESHOLD_USERS = 40
+CACHE_WINDOW_MINUTES = 5
 
 
 class RateLimiter:

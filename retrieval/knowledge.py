@@ -8,8 +8,8 @@ from utils.types import RetrievalResult, SourceType
 
 
 # عتبات القرار — معزولة كي يسهل ضبطها لاحقًا.
-MATCH_THRESHOLD = 0.78
-STRONG_MATCH_THRESHOLD = 0.90
+MATCH_THRESHOLD = 0.55
+STRONG_MATCH_THRESHOLD = 0.70
 
 
 class KnowledgeService:
@@ -42,6 +42,10 @@ class KnowledgeService:
 
         top = valid[0] if valid else None
         score = float(getattr(top, "score", 0) or 0) if top else 0.0
+        
+        
+        
+        print(f"[RETRIEVAL] nodes={len(nodes)} valid={len(valid)} score={score:.3f}")
 
         if not top or score < MATCH_THRESHOLD:
             return RetrievalResult(
@@ -69,26 +73,7 @@ class KnowledgeService:
             technique_name=top.metadata.get("technique", ""),
         )
 
-        doc_type = top.metadata.get("doc_type", "")
-        coverage_verified = top.metadata.get("coverage_verified", False)
-        if doc_type == "exam" and not coverage_verified:
-            return RetrievalResult(
-                context_text="لا يوجد حل معتمد ومتحقق منه لهذا السؤال.",
-                source=SourceType.CONCEPTUAL,
-                score=score,
-            )
-
-        source = (
-            SourceType.MATCHED_SOLUTION
-            if score >= STRONG_MATCH_THRESHOLD
-            else SourceType.SIMILAR_TECHNIQUE
-        )
-        return RetrievalResult(
-            context_text=top.text,
-            source=source,
-            score=score,
-            technique_name=top.metadata.get("technique", ""),
-        )
+        
 
 
 def _require_cohere_key() -> str:

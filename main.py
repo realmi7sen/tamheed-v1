@@ -3,6 +3,13 @@ import os
 import sys
 
 from dotenv import load_dotenv
+
+PROJECT_DIR = Path(__file__).resolve().parent
+load_dotenv(PROJECT_DIR / ".env")
+from prompts.base import BASE_PROMPT
+print(f"[DEBUG] BASE_PROMPT length in chars: {len(BASE_PROMPT)}")
+print(f"[DEBUG] estimated tokens: {len(BASE_PROMPT) // 4}")
+
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 
 from bot.handlers import TamheedMessageHandler
@@ -17,9 +24,6 @@ from retrieval.knowledge import KnowledgeService
 from services.display import DisplayService
 from services.tools import ToolService
 
-
-PROJECT_DIR = Path(__file__).resolve().parent
-load_dotenv(PROJECT_DIR / ".env")
 sys.stdout.reconfigure(encoding="utf-8")
 
 
@@ -52,8 +56,25 @@ def create_application():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler.handle))
     app.add_handler(MessageHandler(filters.VOICE | filters.PHOTO | filters.Document.ALL | filters.VIDEO, handler.handle_media))
 
+    ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
+
     async def error_handler(update, context):
         print(f"Error: {context.error}")
+        if ADMIN_CHAT_ID:
+            try:
+                await context.bot.send_message(
+                    chat_id=ADMIN_CHAT_ID,
+                    text=f"⚠️ خطأ في البوت:\n{context.error}",
+                )
+            except Exception:
+                pass
+        if update and hasattr(update, "message") and update.message:
+            try:
+                await update.message.reply_text(
+                    "صار خطأ مؤقت، جرب مرة ثانية بعد شوي 🙏"
+                )
+            except Exception:
+                pass
 
     app.add_error_handler(error_handler)
     return app

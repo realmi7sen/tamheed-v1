@@ -21,6 +21,12 @@ from services.tools import ToolService
 from utils.errors import DatabaseError, LLMTimeoutError, RetrievalError
 from utils.types import PromptContext, ResponseLength, TeachingMode
 
+import os
+
+from limits.service import RateLimiter, CACHE_THRESHOLD_USERS, CACHE_WINDOW_MINUTES
+
+ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
+
 
 MEMORY_WINDOW_SECONDS = 20*60
 MEMORY_WINDOW_CHARS = 1000
@@ -29,22 +35,19 @@ FOLLOWUP_ROOTS = (
     "كمل", "أكمل", "اكمل",
     "وضح", "وضّح",
     "فهم",
-    "ليش", "لماذا",
     "زياد", "أكثر", "اكثر",
     "بعده", "بعدها",
     "يعني",
     "ثاني", "اعد", "أعد",
-    "كلم",                      # تتكلم / كلامك / تكلمت
-    "قصد",                      # قصدك / وش تقصد
-    "فوق",                      # اللي فوق / الكلام فوق
-    "قبل",                      # اللي قبل / قبل شوي
-    "هذا", "هذي", "ذا",         # وش هذا / هذي كيف
-    "نفس",                      # نفس الشي / نفس المسألة
-    "بسّط", "بسط",              # بسّطها
-    "كرر", "عيد",               # كررها / عيدها
-    "مثال",                     # أعطني مثال (على السابق)
-    "طيب", "طب",                # طيب وبعد
-    "وش",                       # وش يعني / وش هذا — متابعة قصيرة شائعة
+    "كلم",
+    "قصد",
+    "فوق",
+    "قبل",
+    "نفس",
+    "بسّط", "بسط",
+    "كرر", "عيد",
+    "مثال",
+    "طيب", "طب",
 )
 
 
@@ -82,6 +85,17 @@ class TamheedMessageHandler:
         self.limiter = rate_limiter
         self.db = rate_limiter.db
 
+    async def _notify_admin(self, context: ContextTypes.DEFAULT_TYPE, error: Exception, kind: str) -> None:
+        if not ADMIN_CHAT_ID:
+            return
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_CHAT_ID,
+                text=f"⚠️ {kind}:\n{error}",
+            )
+        except Exception:
+            pass
+
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_message = update.message.text
         
@@ -108,8 +122,20 @@ class TamheedMessageHandler:
         )
 
         user_id = update.effective_user.id
-        use_memory = is_followup(user_message) and (
-            self.limiter.seconds_since_last(user_id) <= MEMORY_WINDOW_SECONDS
+
+        recent_enough = (
+              self.limiter.seconds_since_last(user_id)
+              <= MEMORY_WINDOW_SECONDS
+        )
+
+        history = self.db.conversation_get_recent(
+           user_id,
+           limit=4,
+        )
+
+        use_memory = (
+            recent_enough
+            and len(history) >= 2
         )
 
         try:
@@ -122,18 +148,22 @@ class TamheedMessageHandler:
         except RetrievalError as error:
             await update.message.reply_text("عذراً، صار خطأ في البحث عن الحل.")
             print(f"RetrievalError: {error}")
+            await self._notify_admin(context, error, "RetrievalError")
             return
         except DatabaseError as error:
             await update.message.reply_text("عذراً، ما قدرت أوصل لملفك، جرّب بعد شوي.")
             print(f"DatabaseError: {error}")
+            await self._notify_admin(context, error, "DatabaseError")
             return
         except LLMTimeoutError as error:
             await update.message.reply_text("المحرك تأخر بالرد، جرّب مرة ثانية.")
             print(f"LLMTimeoutError: {error}")
+            await self._notify_admin(context, error, "LLMTimeoutError")
             return
         except AnthropicError as error:
             await update.message.reply_text("عذراً، حدث خطأ في التواصل مع المحرك.")
             print(f"AnthropicError: {error}")
+            await self._notify_admin(context, error, "AnthropicError")
             return
 
         self.limiter.record(user_id)
@@ -144,10 +174,6 @@ class TamheedMessageHandler:
 
         for chunk in self.formatter.split(self.display.prepare(reply)):
             await update.message.reply_text(chunk)
-
-
-
-
 
     async def clear_memory(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -172,8 +198,6 @@ class TamheedMessageHandler:
         except Exception:
             pass
         await msg.reply_text("حالياً أستقبل أسئلة نصية بس 🙏 اكتب سؤالك وأنا حاضر")
-        
-        
 
     async def _build_prompt_context(
         self, user_id: int, user_message: str
@@ -204,7 +228,7 @@ class TamheedMessageHandler:
     async def _generate(
         self, ctx: PromptContext, user_id: int, use_memory: bool
     ) -> str:
-        system_prompt = build_system_prompt(ctx)
+        base_prompt, variable_prompt = build_system_prompt(ctx)
         user_prompt = build_user_prompt(ctx)
 
         history = []
@@ -212,16 +236,25 @@ class TamheedMessageHandler:
             history = self.db.conversation_get_recent(user_id, limit=6)
 
         if not use_memory:
-            cache_key = self.cache.make_key(system_prompt, user_prompt)
+            cache_key = self.cache.make_key(base_prompt + variable_prompt, user_prompt)
             cached = self.cache.get(cache_key)
             if cached is not None:
                 return cached
 
+        enable_cache = (
+            self.db.active_users_last_minutes(CACHE_WINDOW_MINUTES)
+            >= CACHE_THRESHOLD_USERS
+        )
+        
+        print(f"[TOKENS] ctx={len(ctx.context_text)} user={len(user_prompt)} hist={sum(len(m['content']) for m in history)}")
+
         reply = await self.llm.generate(
-            system_prompt=system_prompt,
+            base_prompt=base_prompt,
+            variable_prompt=variable_prompt,
             user_prompt=user_prompt,
             response_length=ctx.response_length,
             history=history,
+            enable_cache=enable_cache,
         )
 
         if not use_memory:
