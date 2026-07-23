@@ -74,9 +74,37 @@ class TamheedDB:
                 CREATE INDEX IF NOT EXISTS idx_signals_user
                 ON student_signals (user_id, id)
             """)
+            
+            conn.execute("""
+               CREATE TABLE IF NOT EXISTS students (
+                   user_id INTEGER PRIMARY KEY,
+                   username TEXT,
+                   first_name TEXT,
+                   first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                   total_questions INTEGER DEFAULT 0
+                 )
+            """)
             conn.commit()
             
 
+    def student_touch(self, user_id: int, username: str, first_name: str) -> None:
+     """سجّل الطالب أول مرة، وحدّث آخر ظهور وعدد الأسئلة."""
+     with self.connection() as conn:
+        conn.execute("""
+            INSERT INTO students (user_id, username, first_name, total_questions)
+            VALUES (?, ?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username = excluded.username,
+                first_name = excluded.first_name,
+                last_seen = CURRENT_TIMESTAMP,
+                total_questions = total_questions + 1
+        """, (user_id, username, first_name))
+        conn.commit()
+    
+    
+    
+    
     @contextmanager
     def connection(self):
         """Context manager للاتصال — يفتح وإغلق تلقائي."""

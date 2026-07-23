@@ -175,6 +175,11 @@ class TamheedMessageHandler:
             retrieval_score=prompt_context.retrieval_score,
             was_followup=is_followup(user_message),
         )
+        self.db.student_touch(
+            user_id,
+            update.effective_user.username or "",
+            update.effective_user.first_name or "",
+        )
 
         self.db.conversation_add(user_id, "user", user_message)
         self.db.conversation_add(user_id, "assistant", reply)
