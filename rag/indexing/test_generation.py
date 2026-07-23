@@ -6,7 +6,7 @@ load_dotenv()
 
 from pathlib import Path
 from llama_index.core import StorageContext, load_index_from_storage, Settings
-from llama_index.embeddings.cohere import CohereEmbedding
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 import anthropic
 
 # ========== SETUP ==========
@@ -14,10 +14,9 @@ import anthropic
 project_root = Path(__file__).resolve().parents[3]
 persist_dir = project_root / "Knowledge_Base" / "Math106_index"
 
-Settings.embed_model = CohereEmbedding(
-    api_key=os.environ.get("COHERE_API_KEY"),
-    model_name="embed-multilingual-v3.0",
-    input_type="search_query"
+Settings.embed_model = GoogleGenAIEmbedding(
+    model_name="gemini-embedding-001",
+    api_key=os.environ.get("GOOGLE_API_KEY"),
 )
 storage_context = StorageContext.from_defaults(persist_dir=str(persist_dir))
 index = load_index_from_storage(storage_context)
