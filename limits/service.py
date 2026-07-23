@@ -1,4 +1,5 @@
 import time
+import os
 from database.db import TamheedDB
 
 
@@ -15,11 +16,11 @@ class RateLimiter:
         self,
         daily_limit: int = DAILY_QUESTION_LIMIT,
         cooldown_seconds: int = COOLDOWN_SECONDS,
-        db_path: str = "tamheed.db",
+        db_path: str | None = None,
     ):
         self._daily_limit = daily_limit
         self._cooldown = cooldown_seconds
-        self.db = TamheedDB(db_path)
+        self.db = TamheedDB(db_path or os.environ.get("DB_PATH", "tamheed.db"))
 
     def check(self, user_id: int) -> str | None:
         """يرجع None إذا مسموح، أو رسالة رفض."""
