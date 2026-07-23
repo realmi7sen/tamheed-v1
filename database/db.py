@@ -4,13 +4,13 @@ from contextlib import contextmanager
 import hashlib
 from typing import Optional
 from datetime import datetime
-
+import os
 
 class TamheedDB:
     """طبقة قاعدة البيانات SQLite — كاش، استخدام يومي، محادثات."""
 
-    def __init__(self, db_path: str = "tamheed.db"):
-        self.db_path = Path(db_path)
+    def __init__(self, db_path: str | None = None):
+        self.db_path = Path(db_path or os.environ.get("DB_PATH", "tamheed.db"))
         self._ensure_schema()
 
     def _ensure_schema(self):
