@@ -59,7 +59,23 @@ class TamheedDB:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS student_signals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    topic TEXT,
+                    teaching_mode TEXT,
+                    retrieval_score REAL,
+                    was_followup INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_signals_user
+                ON student_signals (user_id, id)
+            """)
             conn.commit()
+            
 
     @contextmanager
     def connection(self):
@@ -237,3 +253,41 @@ class TamheedDB:
                 (user_id, media_type),
             )
             conn.commit()
+            
+            # ===== STUDENT SIGNALS =====
+    def signal_add(
+        self,
+        user_id: int,
+        topic: str,
+        teaching_mode: str,
+        retrieval_score: float,
+        was_followup: bool,
+    ) -> None:
+        """سجّل إشارة تعلّم واحدة — أساس محرك الطالب."""
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO student_signals
+                    (user_id, topic, teaching_mode, retrieval_score, was_followup)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (user_id, topic, teaching_mode, retrieval_score, int(was_followup)),
+            )
+            conn.commit()
+
+    def signals_recent(self, user_id: int, limit: int = 20) -> list:
+        """آخر N إشارة لطالب — للقراءة عند بناء الملف."""
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT topic, teaching_mode, retrieval_score, was_followup
+                FROM student_signals
+                WHERE user_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            ).fetchall()
+            return [dict(row) for row in rows]
+    
+    

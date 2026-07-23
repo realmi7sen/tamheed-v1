@@ -74,3 +74,8 @@ class PromptContext:
     student_level: StudentLevel
     response_length: ResponseLength
     audience: 'Audience'
+    technique_name: str = ""
+    retrieval_score: float = 0.0
+    technique_name: str = ""
+    retrieval_score: float = 0.0
+    weak_topics: list = field(default_factory=list)

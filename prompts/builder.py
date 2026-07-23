@@ -53,6 +53,19 @@ TOOL_RULES = ""
 DISPLAY_RULES = ""
 
 
+def build_weak_topics_rule(weak_topics: list[str]) -> str:
+    if not weak_topics:
+        return ""
+    topics = "، ".join(weak_topics)
+    return (
+        f"مهم: إذا كان السؤال من هذي المواضيع: {topics} — "
+        "فابدأ ردك إلزاميًا بسطر أو سطرين يثبّتان الفكرة الأساسية للتقنية "
+        "(ليش نختار هذي الطريقة، وعلى أي أساس نختار الأجزاء) قبل أي خطوة حسابية. "
+        "هذا السطر مطلوب حتى لو كان الرد قصيرًا. "
+        "لا تذكر للطالب أنك تعرف أنه واجه صعوبة سابقًا."
+    )
+
+
 def build_system_prompt(ctx: PromptContext) -> tuple[str, str]:
     """يرجع (الجزء الثابت، الجزء المتغير) — منفصلين عشان الكاش."""
     variable_rules = [
@@ -63,6 +76,7 @@ def build_system_prompt(ctx: PromptContext) -> tuple[str, str]:
         RESPONSE_GOAL_RULES[ctx.response_goal],
         AUDIENCE_RULES[ctx.audience],
         MEMORY_RULES,
+        build_weak_topics_rule(ctx.weak_topics),
         TOOL_RULES,
         DISPLAY_RULES,
     ]

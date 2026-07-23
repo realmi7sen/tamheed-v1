@@ -38,16 +38,17 @@ def create_application():
         top_k=3,
     )
     response_formatter = ResponseFormatter()
+    rate_limiter = RateLimiter()
     handler = TamheedMessageHandler(
         knowledge_service=knowledge_service,
         llm_client=TamheedLLMClient(),
-        profile_service=StudentProfileService(),
+        profile_service=StudentProfileService(rate_limiter.db),
         response_formatter=response_formatter,
         memory_service=MemoryService(),
         tool_service=ToolService(),
         display_service=DisplayService(),
         cache=ResponseCache(),
-        rate_limiter=RateLimiter(),
+        rate_limiter=rate_limiter,
     )
 
     app = ApplicationBuilder().token(telegram_token).build()

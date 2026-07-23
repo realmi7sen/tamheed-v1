@@ -4,11 +4,11 @@ from utils.types import Audience, ResponseGoal, TeachingMode
 class TeachingModeSelector:
     """اختيار وضع التدريس. قابل للاستبدال لاحقًا بأزرار تيليجرام أو مصنّف."""
 
-    QUICK_WORDS = QUICK_WORDS = ("بسرعة", "بسرعه", "سريع", "باختصار", "مختصر", "مختصره", "quick")
+    QUICK_WORDS = ("بسرعة", "بسرعه", "سريع", "باختصار", "اختصر", "مختصر", "مختصره", "quick")
     EXAM_WORDS = ("اختبار", "ميد", "فاينل", "مراجعة")
     DIRECT_WORDS = ("حل فقط", "الحل مباشر", "اعطني الحل", "أعطني الحل")
-    GUIDED_WORDS = ("فهمني", "افهم", "أفهم", "ليش", "لماذا", "كيف")
-
+    GUIDED_WORDS = ("فهمني", "افهم", "أفهم", "وضح", "وضّح", "ليش", "لماذا", "كيف")
+        
     @classmethod
     def select(cls, message: str) -> TeachingMode:
         text = message.lower()

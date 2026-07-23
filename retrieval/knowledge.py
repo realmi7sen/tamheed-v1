@@ -1,10 +1,12 @@
 from pathlib import Path
 
 from llama_index.core import Settings, StorageContext, load_index_from_storage
-from llama_index.embeddings.cohere import CohereEmbedding
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 
 from utils.errors import RetrievalError
 from utils.types import RetrievalResult, SourceType
+
+from llama_index.embeddings.cohere import CohereEmbedding
 
 
 # عتبات القرار — معزولة كي يسهل ضبطها لاحقًا.

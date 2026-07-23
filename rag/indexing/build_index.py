@@ -18,14 +18,15 @@ persist_dir = project_root / "Knowledge_Base" / "Math106_index"
 print(f"Knowledge Base: {data_dir}")
 
 # ========= EMBEDDING MODEL =========
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 
-Settings.embed_model = CohereEmbedding(
-    api_key=os.environ["COHERE_API_KEY"],
-    model_name="embed-multilingual-v3.0",
-    input_type="search_document",
+Settings.embed_model = GoogleGenAIEmbedding(
+    model_name="gemini-embedding-001",
+    api_key=os.environ["GOOGLE_API_KEY"],
+    embed_batch_size=64,
 )
 
-Settings.node_parser = SentenceSplitter(chunk_size=8192, chunk_overlap=0)
+Settings.node_parser = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
 
 # ========= METADATA =========
 
@@ -112,8 +113,20 @@ print(f"Loaded {len(documents)} documents")
 # ========= BUILD INDEX =========
 
 print("Building index...")
-index = VectorStoreIndex.from_documents(documents)
-print("Saving index...")
+import time
+
+BATCH = 30
+index = VectorStoreIndex.from_documents(documents[:BATCH])
+print(f"indexed {BATCH}/{len(documents)}")
+
+from llama_index.core.node_parser import SentenceSplitter
+splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
+
+for i in range(BATCH, len(documents), BATCH):
+    time.sleep(30)
+    nodes = splitter.get_nodes_from_documents(documents[i:i + BATCH])
+    index.insert_nodes(nodes)
+    print(f"indexed {min(i + BATCH, len(documents))}/{len(documents)}")
 index.storage_context.persist(persist_dir=str(persist_dir))
 print("Done!")
 print(f"Saved to: {persist_dir}")

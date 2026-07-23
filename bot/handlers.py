@@ -167,6 +167,14 @@ class TamheedMessageHandler:
             return
 
         self.limiter.record(user_id)
+        
+        self.db.signal_add(
+            user_id=user_id,
+            topic=prompt_context.technique_name or "",
+            teaching_mode=prompt_context.teaching_mode.value,
+            retrieval_score=prompt_context.retrieval_score,
+            was_followup=is_followup(user_message),
+        )
 
         self.db.conversation_add(user_id, "user", user_message)
         self.db.conversation_add(user_id, "assistant", reply)
@@ -203,6 +211,7 @@ class TamheedMessageHandler:
         self, user_id: int, user_message: str
     ) -> PromptContext:
         profile = self.profiles.get_profile(user_id)
+        print(f"[PROFILE] level={profile.level.value} weak={profile.metadata.get('weak_topics')}")
         retrieval = await self.knowledge.search(user_message)
         context_text = self.formatter.format_context(retrieval.context_text)
 
@@ -223,7 +232,11 @@ class TamheedMessageHandler:
             student_level=profile.level,
             response_length=response_length,
             audience=audience,
+            technique_name=retrieval.technique_name,
+            retrieval_score=retrieval.score,
+            weak_topics=profile.metadata.get("weak_topics", []),
         )
+        
 
     async def _generate(
         self, ctx: PromptContext, user_id: int, use_memory: bool
@@ -247,7 +260,7 @@ class TamheedMessageHandler:
         )
         
         print(f"[TOKENS] ctx={len(ctx.context_text)} user={len(user_prompt)} hist={sum(len(m['content']) for m in history)}")
-
+        print(f"[WEAK] {ctx.weak_topics}")
         reply = await self.llm.generate(
             base_prompt=base_prompt,
             variable_prompt=variable_prompt,
