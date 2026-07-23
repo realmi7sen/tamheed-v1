@@ -7,7 +7,7 @@ from pathlib import Path
 
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, Settings
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.embeddings.cohere import CohereEmbedding
+
 
 # ========= CONFIG =========
 
@@ -23,7 +23,7 @@ from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 Settings.embed_model = GoogleGenAIEmbedding(
     model_name="gemini-embedding-001",
     api_key=os.environ["GOOGLE_API_KEY"],
-    embed_batch_size=64,
+    embed_batch_size=5,
 )
 
 Settings.node_parser = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
@@ -114,19 +114,22 @@ print(f"Loaded {len(documents)} documents")
 
 print("Building index...")
 import time
-
-BATCH = 30
-index = VectorStoreIndex.from_documents(documents[:BATCH])
-print(f"indexed {BATCH}/{len(documents)}")
-
 from llama_index.core.node_parser import SentenceSplitter
-splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
+from llama_index.core import StorageContext
 
-for i in range(BATCH, len(documents), BATCH):
-    time.sleep(30)
-    nodes = splitter.get_nodes_from_documents(documents[i:i + BATCH])
-    index.insert_nodes(nodes)
-    print(f"indexed {min(i + BATCH, len(documents))}/{len(documents)}")
+splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
+all_nodes = splitter.get_nodes_from_documents(documents)
+print(f"total nodes: {len(all_nodes)}")
+
+BATCH = 20
+index = VectorStoreIndex(all_nodes[:BATCH])
+print(f"indexed {BATCH}/{len(all_nodes)}")
+
+for i in range(BATCH, len(all_nodes), BATCH):
+    time.sleep(60)
+    index.insert_nodes(all_nodes[i:i + BATCH])
+    print(f"indexed {min(i + BATCH, len(all_nodes))}/{len(all_nodes)}")
+
 index.storage_context.persist(persist_dir=str(persist_dir))
 print("Done!")
 print(f"Saved to: {persist_dir}")

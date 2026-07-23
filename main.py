@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 PROJECT_DIR = Path(__file__).resolve().parent
 load_dotenv(PROJECT_DIR / ".env")
 from prompts.base import BASE_PROMPT
-print(f"[DEBUG] BASE_PROMPT length in chars: {len(BASE_PROMPT)}")
-print(f"[DEBUG] estimated tokens: {len(BASE_PROMPT) // 4}")
+
 
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 

@@ -211,7 +211,6 @@ class TamheedMessageHandler:
         self, user_id: int, user_message: str
     ) -> PromptContext:
         profile = self.profiles.get_profile(user_id)
-        print(f"[PROFILE] level={profile.level.value} weak={profile.metadata.get('weak_topics')}")
         retrieval = await self.knowledge.search(user_message)
         context_text = self.formatter.format_context(retrieval.context_text)
 
@@ -259,8 +258,7 @@ class TamheedMessageHandler:
             >= CACHE_THRESHOLD_USERS
         )
         
-        print(f"[TOKENS] ctx={len(ctx.context_text)} user={len(user_prompt)} hist={sum(len(m['content']) for m in history)}")
-        print(f"[WEAK] {ctx.weak_topics}")
+        
         reply = await self.llm.generate(
             base_prompt=base_prompt,
             variable_prompt=variable_prompt,

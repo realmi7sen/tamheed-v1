@@ -6,22 +6,19 @@ from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from utils.errors import RetrievalError
 from utils.types import RetrievalResult, SourceType
 
-from llama_index.embeddings.cohere import CohereEmbedding
-
 
 # عتبات القرار — معزولة كي يسهل ضبطها لاحقًا.
 MATCH_THRESHOLD = 0.55
-STRONG_MATCH_THRESHOLD = 0.70
+STRONG_MATCH_THRESHOLD = 0.80
 
 
 class KnowledgeService:
     """يغلّف بناء الفهرس والاسترجاع وقرار نوع الدليل."""
 
-    def __init__(self, persist_dir: Path, top_k: int = 1):
-        Settings.embed_model = CohereEmbedding(
-            api_key=_require_cohere_key(),
-            model_name="embed-multilingual-v3.0",
-            input_type="search_query",
+    def __init__(self, persist_dir: Path, top_k: int = 3):
+        Settings.embed_model = GoogleGenAIEmbedding(
+            model_name="gemini-embedding-001",
+            api_key=_require_google_key(),
         )
         storage_context = StorageContext.from_defaults(persist_dir=str(persist_dir))
         index = load_index_from_storage(storage_context)
@@ -44,10 +41,9 @@ class KnowledgeService:
 
         top = valid[0] if valid else None
         score = float(getattr(top, "score", 0) or 0) if top else 0.0
-        
-        
-        
+
         print(f"[RETRIEVAL] nodes={len(nodes)} valid={len(valid)} score={score:.3f}")
+        
 
         if not top or score < MATCH_THRESHOLD:
             return RetrievalResult(
@@ -75,13 +71,11 @@ class KnowledgeService:
             technique_name=top.metadata.get("technique", ""),
         )
 
-        
 
-
-def _require_cohere_key() -> str:
+def _require_google_key() -> str:
     import os
 
-    key = os.environ.get("COHERE_API_KEY")
+    key = os.environ.get("GOOGLE_API_KEY")
     if not key:
-        raise RetrievalError("COHERE_API_KEY is missing.")
+        raise RetrievalError("GOOGLE_API_KEY is missing.")
     return key
