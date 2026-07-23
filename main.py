@@ -38,6 +38,7 @@ def create_application():
     )
     response_formatter = ResponseFormatter()
     rate_limiter = RateLimiter()
+    admin_handler = AdminHandler(str(rate_limiter.db.db_path))
     handler = TamheedMessageHandler(
         knowledge_service=knowledge_service,
         llm_client=TamheedLLMClient(),
@@ -48,7 +49,6 @@ def create_application():
         display_service=DisplayService(),
         cache=ResponseCache(),
         rate_limiter=rate_limiter,
-        admin_handler = AdminHandler(str(rate_limiter.db.db_path))
     )
 
     app = ApplicationBuilder().token(telegram_token).build()
