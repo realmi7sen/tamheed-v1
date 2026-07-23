@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
 import sys
-
+from admin import AdminHandler
 from dotenv import load_dotenv
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -48,11 +48,15 @@ def create_application():
         display_service=DisplayService(),
         cache=ResponseCache(),
         rate_limiter=rate_limiter,
+        admin_handler = AdminHandler(str(rate_limiter.db.db_path))
     )
 
     app = ApplicationBuilder().token(telegram_token).build()
     app.add_handler(CommandHandler("start", GreetingHandler.start))
     app.add_handler(CommandHandler("new", handler.clear_memory))
+    app.add_handler(CommandHandler("stats", admin_handler.stats))
+    app.add_handler(CommandHandler("dashboard", admin_handler.dashboard))
+    app.add_handler(CommandHandler("backup", admin_handler.backup))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler.handle))
     app.add_handler(MessageHandler(filters.VOICE | filters.PHOTO | filters.Document.ALL | filters.VIDEO, handler.handle_media))
 
