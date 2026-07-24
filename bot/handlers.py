@@ -217,7 +217,15 @@ class TamheedMessageHandler:
     ) -> PromptContext:
         profile = self.profiles.get_profile(user_id)
         retrieval = await self.knowledge.search(user_message)
-        context_text = self.formatter.format_context(retrieval.context_text)
+        is_followup_q = len(user_message) <= 15 and not any(c in user_message for c in "0123456789x∫√")
+        previous_answer = ""
+
+        if is_followup_q:
+            context_text = ""
+            previous_answer = self.db.conversation_last_assistant(user_id) or ""
+        else:
+            context_text = self.formatter.format_context(retrieval.context_text)
+        
 
         teaching_mode = TeachingModeSelector.select(user_message)
         response_goal = ResponseGoalSelector.select(teaching_mode, user_message)
@@ -239,6 +247,8 @@ class TamheedMessageHandler:
             technique_name=retrieval.technique_name,
             retrieval_score=retrieval.score,
             weak_topics=profile.metadata.get("weak_topics", []),
+            is_followup=is_followup_q,
+            previous_answer=previous_answer,
         )
         
 
@@ -250,7 +260,7 @@ class TamheedMessageHandler:
 
         history = []
         if use_memory:
-            prev = self.db.conversation_get_recent(user_id, limit=2)
+            prev = self.db.conversation_get_recent(user_id, limit=1)
             if prev:
                 questions = "\n".join(f"- {m['content']}" for m in prev)
                 user_prompt = (

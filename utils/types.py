@@ -79,3 +79,6 @@ class PromptContext:
     technique_name: str = ""
     retrieval_score: float = 0.0
     weak_topics: list = field(default_factory=list)
+    is_followup: bool = False
+    is_followup: bool = False
+    previous_answer: str = ""

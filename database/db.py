@@ -316,5 +316,13 @@ class TamheedDB:
                 (user_id, limit),
             ).fetchall()
             return [dict(row) for row in rows]
+        
+    def conversation_last_assistant(self, user_id: int) -> str | None:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT content FROM conversations WHERE user_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            return row["content"] if row else None
     
     

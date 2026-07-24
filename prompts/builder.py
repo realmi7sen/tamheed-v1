@@ -86,6 +86,8 @@ def build_system_prompt(ctx: PromptContext) -> tuple[str, str]:
 
 def build_user_prompt(ctx: PromptContext) -> str:
     """يبني رسالة المستخدم من PromptContext بدل نص طويل داخل الـ handler."""
+    if ctx.is_followup and ctx.previous_answer:
+        return f"شرحك السابق:\n{ctx.previous_answer}\n\nالطالب قال: {ctx.user_message}\n\nاشرح نفس المسألة بطريقة أبسط. لا تطرح موضوع جديد."
     matched = ctx.source == SourceType.MATCHED_SOLUTION
     context_intro = (
         "الحل التالي هو سياقك الموثوق لهذا السؤال:"
