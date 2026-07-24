@@ -4,8 +4,8 @@ from anthropic import AsyncAnthropic
 
 from utils.errors import LLMTimeoutError
 from utils.types import ResponseLength
-
-
+import os
+DEBUG = os.environ.get("DEBUG") == "1"
 MODEL_NAME = "claude-haiku-4-5-20251001"
 REQUEST_TIMEOUT = 60.0
 
@@ -40,19 +40,11 @@ class TamheedLLMClient:
         base_block = {"type": "text", "text": base_prompt}
         if enable_cache:
             base_block["cache_control"] = {"type": "ephemeral"}
+
         system_blocks = [
             base_block,
             {"type": "text", "text": variable_prompt},
         ]
-
-        system_blocks.append(base_block)
-
-        system_blocks.append(
-            {
-                "type": "text",
-                "text": variable_prompt,
-            }
-        )
 
         try:
             message = await asyncio.wait_for(
@@ -68,11 +60,14 @@ class TamheedLLMClient:
         except asyncio.TimeoutError as error:
             raise LLMTimeoutError("انتهت مهلة الاتصال بالنموذج.") from error
 
-        print(
-            f"[CACHE] created={message.usage.cache_creation_input_tokens} "
-            f"read={message.usage.cache_read_input_tokens} "
-            f"input={message.usage.input_tokens}"
-        )
+        if DEBUG:
+            print(
+                f"[TOKENS] in={message.usage.input_tokens} "
+                f"out={message.usage.output_tokens} "
+                f"cache_created={message.usage.cache_creation_input_tokens} "
+                f"cache_read={message.usage.cache_read_input_tokens}",
+                flush=True,
+            )
 
         if not message.content or not message.content[0].text:
             raise LLMTimeoutError("النموذج رجع رد فاضي.")
