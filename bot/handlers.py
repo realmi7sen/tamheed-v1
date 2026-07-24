@@ -27,6 +27,7 @@ from limits.service import RateLimiter, CACHE_THRESHOLD_USERS, CACHE_WINDOW_MINU
 
 ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
 
+DEBUG = os.environ.get("DEBUG") == "1"
 
 MEMORY_WINDOW_SECONDS = 20*60
 MEMORY_WINDOW_CHARS = 1000
