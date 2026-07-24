@@ -205,20 +205,19 @@ class TamheedDB:
             )
             conn.commit()
 
-    def conversation_get_recent(self, user_id: int, limit: int = 6) -> list:
-        """استرجع آخر N رسالة لمستخدم (للذاكرة)."""
-        with self.connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT role, content FROM conversations 
-                WHERE user_id = ? 
-                ORDER BY id DESC 
-                LIMIT ?
-                """,
-                (user_id, limit),
-            ).fetchall()
-            # عكس الترتيب (الأقدم أولاً)
-            return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
+    
+    def conversation_get_recent(self, user_id: int, limit: int = 2) -> list:
+     with self.connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT role, content FROM conversations 
+            WHERE user_id = ? AND role = 'user'
+            ORDER BY id DESC 
+            LIMIT ?
+            """,
+            (user_id, limit),
+        ).fetchall()
+        return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
 
     def conversation_clear_old(self, user_id: int, keep_count: int = 50) -> None:
         """احذف محادثات قديمة — احتفظ بـ N رسالة الأخيرة فقط."""

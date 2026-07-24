@@ -130,12 +130,12 @@ class TamheedMessageHandler:
 
         history = self.db.conversation_get_recent(
            user_id,
-           limit=4,
+           limit=2,
         )
 
         use_memory = (
             recent_enough
-            and len(history) >= 2
+            and len(history) >= 1
         )
 
         try:
@@ -250,13 +250,19 @@ class TamheedMessageHandler:
 
         history = []
         if use_memory:
-            history = self.db.conversation_get_recent(user_id, limit=6)
+            prev = self.db.conversation_get_recent(user_id, limit=2)
+            if prev:
+                questions = "\n".join(f"- {m['content']}" for m in prev)
+                user_prompt = (
+                    f"أسئلة الطالب السابقة (للسياق فقط، لا تجب عليها):\n{questions}\n\n"
+                    f"{user_prompt}"
+                )
 
         if not use_memory:
-            cache_key = self.cache.make_key(base_prompt + variable_prompt, user_prompt)
-            cached = self.cache.get(cache_key)
-            if cached is not None:
-                return cached
+         cache_key = self.cache.make_key(base_prompt + variable_prompt, user_prompt)
+         cached = self.cache.get(cache_key)
+         if cached is not None:
+            return cached
 
         enable_cache = (
             self.db.active_users_last_minutes(CACHE_WINDOW_MINUTES)
