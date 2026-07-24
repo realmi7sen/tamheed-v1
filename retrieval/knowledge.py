@@ -56,7 +56,7 @@ class KnowledgeService:
         context_parts = [top.text]
         for n in valid[1:3]:
             n_score = float(getattr(n, "score", 0) or 0)
-            if n_score >= MATCH_THRESHOLD and (score - n_score) <= 0.05:
+            if n_score >= MATCH_THRESHOLD and (score - n_score) <= 0.03:
                 context_parts.append(n.text)
 
         source = (
