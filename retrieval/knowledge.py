@@ -6,11 +6,11 @@ from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from utils.errors import RetrievalError
 from utils.types import RetrievalResult, SourceType
 
-
+import os
 # عتبات القرار — معزولة كي يسهل ضبطها لاحقًا.
 MATCH_THRESHOLD = 0.55
 STRONG_MATCH_THRESHOLD = 0.80
-
+DEBUG = os.environ.get("DEBUG") == "1"
 
 class KnowledgeService:
     """يغلّف بناء الفهرس والاسترجاع وقرار نوع الدليل."""
