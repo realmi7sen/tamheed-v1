@@ -41,8 +41,9 @@ class KnowledgeService:
 
         top = valid[0] if valid else None
         score = float(getattr(top, "score", 0) or 0) if top else 0.0
-
-        print(f"[RETRIEVAL] nodes={len(nodes)} valid={len(valid)} score={score:.3f}")
+        
+        if DEBUG:
+         print(f"[RETRIEVAL] nodes={len(nodes)} valid={len(valid)} score={score:.3f}")
         
 
         if not top or score < MATCH_THRESHOLD:

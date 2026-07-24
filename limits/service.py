@@ -3,7 +3,7 @@ import os
 from database.db import TamheedDB
 
 
-DAILY_QUESTION_LIMIT = 1000
+DAILY_QUESTION_LIMIT = 30
 COOLDOWN_SECONDS = 10
 CACHE_THRESHOLD_USERS = 40
 CACHE_WINDOW_MINUTES = 5
@@ -35,7 +35,7 @@ class RateLimiter:
             return "لحظة يا بطل، خلّص السؤال اللي قبله أول 😅 جرّب بعد ثواني."
         if count >= self._daily_limit:
             return (
-                "وصلت الحد اليومي للأسئلة (٣٠ سؤال). "
+                f"وصلت الحد اليومي للأسئلة ({self._daily_limit} سؤال). "
                 "ارجع بكرة وكمّل — أو راجع الأسئلة اللي شرحناها اليوم 📚"
             )
         return None

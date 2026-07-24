@@ -64,7 +64,7 @@ def _collect(db_path: str) -> dict:
         ),
         "today": _one(
             conn,
-            "SELECT COUNT(*) FROM student_signals WHERE DATE(created_at)=DATE('now')",
+            "SELECT COUNT(*) FROM student_signals WHERE DATE(created_at, '+3 hours')=DATE('now', '+3 hours')",
         ),
         "returning": _one(
             conn,
@@ -96,7 +96,7 @@ def _collect(db_path: str) -> dict:
             FROM students ORDER BY total_questions DESC LIMIT 60
         """),
         "daily": _rows(conn, """
-            SELECT DATE(created_at) day, COUNT(*) n
+            SELECT DATE(created_at, '+3 hours') day, COUNT(*) n
             FROM student_signals GROUP BY day ORDER BY day DESC LIMIT 14
         """),
         "recent": _rows(conn, """
