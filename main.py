@@ -34,7 +34,7 @@ def create_application():
     project_root = PROJECT_DIR
     knowledge_service = KnowledgeService(
         persist_dir=project_root / "Knowledge_Base" / "Math106_index",
-        top_k=3,
+        top_k=2,
     )
     response_formatter = ResponseFormatter()
     rate_limiter = RateLimiter()
