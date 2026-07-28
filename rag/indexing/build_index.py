@@ -23,7 +23,7 @@ from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 Settings.embed_model = GoogleGenAIEmbedding(
     model_name="gemini-embedding-001",
     api_key=os.environ["GOOGLE_API_KEY"],
-    embed_batch_size=5,
+    embed_batch_size=20,
 )
 
 Settings.node_parser = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
