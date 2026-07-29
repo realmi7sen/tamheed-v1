@@ -15,7 +15,7 @@ DEBUG = os.environ.get("DEBUG") == "1"
 class KnowledgeService:
     """يغلّف بناء الفهرس والاسترجاع وقرار نوع الدليل."""
 
-    def __init__(self, persist_dir: Path, top_k: int = 3):
+    def __init__(self, persist_dir: Path, top_k: int = 2):
         Settings.embed_model = GoogleGenAIEmbedding(
             model_name="gemini-embedding-001",
             api_key=_require_google_key(),

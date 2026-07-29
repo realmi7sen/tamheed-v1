@@ -26,7 +26,7 @@ Settings.embed_model = GoogleGenAIEmbedding(
     embed_batch_size=20,
 )
 
-Settings.node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=80)
+Settings.node_parser = SentenceSplitter(chunk_size=650, chunk_overlap=100)
 
 # ========= METADATA =========
 
@@ -117,7 +117,7 @@ import time
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core import StorageContext
 
-splitter = SentenceSplitter(chunk_size=512, chunk_overlap=80)
+splitter = SentenceSplitter(chunk_size=720, chunk_overlap=120)
 all_nodes = splitter.get_nodes_from_documents(documents)
 print(f"total nodes: {len(all_nodes)}")
 

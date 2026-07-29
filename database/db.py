@@ -7,7 +7,7 @@ from datetime import datetime
 import os
 
 class TamheedDB:
-    """طبقة قاعدة البيانات SQLite — كاش، استخدام يومي، محادثات."""
+    """طبقة قاعدة البيانات SQLite — كاش، استخدام يومي، محادثات، اشتراكات."""
 
     def __init__(self, db_path: str | None = None):
         self.db_path = Path(db_path or os.environ.get("DB_PATH", "tamheed.db"))
@@ -74,7 +74,7 @@ class TamheedDB:
                 CREATE INDEX IF NOT EXISTS idx_signals_user
                 ON student_signals (user_id, id)
             """)
-            
+
             conn.execute("""
                CREATE TABLE IF NOT EXISTS students (
                    user_id INTEGER PRIMARY KEY,
@@ -82,11 +82,36 @@ class TamheedDB:
                    first_name TEXT,
                    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                   total_questions INTEGER DEFAULT 0
+                   total_questions INTEGER DEFAULT 0,
+                   free_used INTEGER DEFAULT 0
                  )
             """)
+
+            # ===== ACCESS: codes + subscriptions =====
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS codes (
+                    code TEXT PRIMARY KEY,
+                    redeemed_by INTEGER,
+                    redeemed_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    user_id INTEGER PRIMARY KEY,
+                    expires_at TIMESTAMP NOT NULL,
+                    code_used TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # migration: أضف free_used لجدول students القديم لو ما كان موجود
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(students)").fetchall()]
+            if "free_used" not in cols:
+                conn.execute("ALTER TABLE students ADD COLUMN free_used INTEGER DEFAULT 0")
+
             conn.commit()
-            
+
 
     def student_touch(self, user_id: int, username: str, first_name: str) -> None:
      """سجّل الطالب أول مرة، وحدّث آخر ظهور وعدد الأسئلة."""
@@ -101,10 +126,10 @@ class TamheedDB:
                 total_questions = total_questions + 1
         """, (user_id, username, first_name))
         conn.commit()
-    
-    
-    
-    
+
+
+
+
     @contextmanager
     def connection(self):
         """Context manager للاتصال — يفتح وإغلق تلقائي."""
@@ -183,7 +208,7 @@ class TamheedDB:
                     (ts, user_id),
                 )
             conn.commit()
-            
+
     def active_users_last_minutes(self, minutes: int = 5) -> int:
         """عدد المستخدمين النشطين خلال آخر N دقيقة.
         ملاحظة: user_usage صف واحد لكل مستخدم، فهذا عدد مستخدمين لا عدد طلبات."""
@@ -195,6 +220,85 @@ class TamheedDB:
             ).fetchone()
             return row[0] if row else 0
 
+    # ===== ACCESS: subscription + free counter =====
+    def is_subscribed(self, user_id: int) -> bool:
+        """True إذا عنده اشتراك ساري."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT expires_at FROM subscriptions WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP",
+                (user_id,),
+            ).fetchone()
+            return row is not None
+
+    def subscription_expiry(self, user_id: int) -> str | None:
+        """تاريخ انتهاء الاشتراك كنص، أو None."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT expires_at FROM subscriptions WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            return row["expires_at"] if row else None
+
+    def free_used_get(self, user_id: int) -> int:
+        """كم سؤال مجاني استهلك الطالب."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT free_used FROM students WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            return row["free_used"] if row else 0
+
+    def free_used_increment(self, user_id: int) -> None:
+        """زد عداد الأسئلة المجانية بواحد."""
+        with self.connection() as conn:
+            conn.execute(
+                "UPDATE students SET free_used = free_used + 1 WHERE user_id = ?",
+                (user_id,),
+            )
+            conn.commit()
+
+    def redeem_code(self, code: str, user_id: int, expires_at: str) -> str:
+        """
+        يحاول تفعيل كود. يرجع:
+          'ok'        — نجح، الاشتراك مفعّل
+          'not_found' — الكود غير موجود
+          'used'      — الكود مستخدم من قبل
+        """
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT code, redeemed_by FROM codes WHERE code = ?",
+                (code,),
+            ).fetchone()
+            if row is None:
+                return "not_found"
+            if row["redeemed_by"] is not None:
+                return "used"
+            conn.execute(
+                "UPDATE codes SET redeemed_by = ?, redeemed_at = CURRENT_TIMESTAMP WHERE code = ?",
+                (user_id, code),
+            )
+            conn.execute(
+                """
+                INSERT INTO subscriptions (user_id, expires_at, code_used)
+                VALUES (?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    expires_at = excluded.expires_at,
+                    code_used = excluded.code_used
+                """,
+                (user_id, expires_at, code),
+            )
+            conn.commit()
+            return "ok"
+
+    def code_add(self, code: str) -> None:
+        """أضف كود جديد للبيع (للأدمن)."""
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO codes (code) VALUES (?)",
+                (code,),
+            )
+            conn.commit()
+
     # ===== CONVERSATIONS (الذاكرة) =====
     def conversation_add(self, user_id: int, role: str, content: str) -> None:
         """أضف رسالة للمحادثة (user أو assistant)."""
@@ -205,7 +309,7 @@ class TamheedDB:
             )
             conn.commit()
 
-    
+
     def conversation_get_recent(self, user_id: int, limit: int = 2) -> list:
      with self.connection() as conn:
         rows = conn.execute(
@@ -280,8 +384,8 @@ class TamheedDB:
                 (user_id, media_type),
             )
             conn.commit()
-            
-            # ===== STUDENT SIGNALS =====
+
+    # ===== STUDENT SIGNALS =====
     def signal_add(
         self,
         user_id: int,
@@ -316,7 +420,7 @@ class TamheedDB:
                 (user_id, limit),
             ).fetchall()
             return [dict(row) for row in rows]
-        
+
     def conversation_last_assistant(self, user_id: int) -> str | None:
         with self.connection() as conn:
             row = conn.execute(
@@ -324,5 +428,3 @@ class TamheedDB:
                 (user_id,),
             ).fetchone()
             return row["content"] if row else None
-    
-    

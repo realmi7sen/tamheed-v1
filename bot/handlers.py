@@ -22,15 +22,29 @@ from utils.errors import DatabaseError, LLMTimeoutError, RetrievalError
 from utils.types import PromptContext, ResponseLength, TeachingMode
 
 import os
+from datetime import datetime, timezone
 
 from limits.service import RateLimiter, CACHE_THRESHOLD_USERS, CACHE_WINDOW_MINUTES
 
 ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
+ADMIN_ID_INT = int(ADMIN_CHAT_ID) if ADMIN_CHAT_ID else None
 
 DEBUG = os.environ.get("DEBUG") == "1"
 
 MEMORY_WINDOW_SECONDS = 20*60
 MEMORY_WINDOW_CHARS = 1000
+
+# ===== ACCESS GATE =====
+FREE_QUESTION_LIMIT = 5   # أسئلة مجانية مدى الحياة لأي شخص
+# تاريخ انتهاء الاشتراك — آخر الترم. عدّلها للتاريخ الحقيقي.
+SUBSCRIPTION_EXPIRES_AT = "2026-12-31 23:59:59"
+
+SUBSCRIBE_MESSAGE = (
+    "خلصت أسئلتك المجانية (٥ أسئلة) 🎓\n"
+    "للاستمرار، اشترك واحصل على ٢٠ سؤال يومياً لبقية الترم.\n"
+    "للاشتراك تواصل معنا، وبعد الدفع بيوصلك كود.\n"
+    "فعّل الكود بالأمر:  /redeem الكود"
+)
 
 FOLLOWUP_ROOTS = (
     "كمل", "أكمل", "اكمل",
@@ -97,23 +111,81 @@ class TamheedMessageHandler:
         except Exception:
             pass
 
+    def _access_check(self, user_id: int) -> str | None:
+        """
+        بوابة الوصول — تقرر إذا يُسمح للطالب بسؤال قبل أي استدعاء لـ Claude.
+        يرجع None إذا مسموح، أو رسالة رفض.
+        - الأدمن: يمر دائماً.
+        - المشترك: يمر (الحد اليومي ٢٠ يتكفّل به RateLimiter لاحقاً).
+        - المجاني تحت ٥: يمر.
+        - المجاني عند ٥: رسالة الاشتراك، بدون استدعاء المحرك.
+        """
+        if ADMIN_ID_INT is not None and user_id == ADMIN_ID_INT:
+            return None
+        if self.db.is_subscribed(user_id):
+            return None
+        if self.db.free_used_get(user_id) < FREE_QUESTION_LIMIT:
+            return None
+        return SUBSCRIBE_MESSAGE
+
+    def _is_free_user(self, user_id: int) -> bool:
+        """طالب مجاني = ليس أدمن وليس مشترك. يُستخدم لعدّ الأسئلة المجانية."""
+        if ADMIN_ID_INT is not None and user_id == ADMIN_ID_INT:
+            return False
+        return not self.db.is_subscribed(user_id)
+
+    async def redeem(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """أمر /redeem — تفعيل كود اشتراك."""
+        user_id = update.effective_user.id
+        parts = (update.message.text or "").split()
+
+        if len(parts) < 2:
+            await update.message.reply_text(
+                "اكتب الكود بعد الأمر، مثال:\n/redeem TAMHEED-XXXX"
+            )
+            return
+
+        code = parts[1].strip()
+        result = self.db.redeem_code(code, user_id, SUBSCRIPTION_EXPIRES_AT)
+
+        if result == "ok":
+            await update.message.reply_text(
+                "تم تفعيل اشتراكك ✅\n"
+                "معك ٢٠ سؤال يومياً لبقية الترم. اسأل اللي تبي 📚"
+            )
+        elif result == "used":
+            await update.message.reply_text(
+                "هذا الكود مستخدم من قبل ❌ تأكد من الكود أو تواصل معنا."
+            )
+        else:  # not_found
+            await update.message.reply_text(
+                "الكود غير صحيح ❌ تأكد من كتابته صح."
+            )
+
     async def handle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user_message = update.message.text
-        
+
         if len(user_message) > MEMORY_WINDOW_CHARS:
            await update.message.reply_text(
                 "رسالتك طويلة شوي 😅 اختصر سؤالك أو قسّمه لأجزاء، "
                 "وأنا بساعدك ."
             )
-           return 
-        
-            
+           return
 
         if GreetingHandler.is_greeting(user_message):
             await GreetingHandler.reply(update)
             return
 
-        denial = self.limiter.check(update.effective_user.id)
+        user_id = update.effective_user.id
+
+        # ===== بوابة الوصول: قبل أي استدعاء للمحرك =====
+        access_denial = self._access_check(user_id)
+        if access_denial:
+            await update.message.reply_text(access_denial)
+            return
+
+        # الحد اليومي + المهلة (للمشتركين والأدمن)
+        denial = self.limiter.check(user_id)
         if denial:
             await update.message.reply_text(denial)
             return
@@ -121,8 +193,6 @@ class TamheedMessageHandler:
         await context.bot.send_chat_action(
             chat_id=update.effective_chat.id, action="typing"
         )
-
-        user_id = update.effective_user.id
 
         recent_enough = (
               self.limiter.seconds_since_last(user_id)
@@ -168,7 +238,11 @@ class TamheedMessageHandler:
             return
 
         self.limiter.record(user_id)
-        
+
+        # عُدّ السؤال المجاني فقط بعد نجاح الرد (لا نحرق رصيد على خطأ)
+        if self._is_free_user(user_id):
+            self.db.free_used_increment(user_id)
+
         self.db.signal_add(
             user_id=user_id,
             topic=prompt_context.technique_name or "",
@@ -226,7 +300,7 @@ class TamheedMessageHandler:
             previous_answer = self.db.conversation_last_assistant(user_id) or ""
         else:
             context_text = self.formatter.format_context(retrieval.context_text)
-        
+
 
         teaching_mode = TeachingModeSelector.select(user_message)
         response_goal = ResponseGoalSelector.select(teaching_mode, user_message)
@@ -251,7 +325,7 @@ class TamheedMessageHandler:
             is_followup=is_followup_q,
             previous_answer=previous_answer,
         )
-        
+
 
     async def _generate(
         self, ctx: PromptContext, user_id: int, use_memory: bool
@@ -279,8 +353,8 @@ class TamheedMessageHandler:
             self.db.active_users_last_minutes(CACHE_WINDOW_MINUTES)
             >= CACHE_THRESHOLD_USERS
         )
-        
-        
+
+
         reply = await self.llm.generate(
             base_prompt=base_prompt,
             variable_prompt=variable_prompt,
@@ -293,3 +367,5 @@ class TamheedMessageHandler:
         if not use_memory:
             self.cache.set(cache_key, reply)
         return reply
+    
+    
