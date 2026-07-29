@@ -69,17 +69,15 @@ def build_weak_topics_rule(weak_topics: list[str]) -> str:
 def build_system_prompt(ctx: PromptContext) -> tuple[str, str]:
     """يرجع (الجزء الثابت، الجزء المتغير) — منفصلين عشان الكاش."""
     variable_rules = [
-        TEACHING_MODE_RULES[ctx.teaching_mode],
-        EVIDENCE_RULES[ctx.source],
-        STUDENT_LEVEL_RULES[ctx.student_level],
-        RESPONSE_LENGTH_RULES[ctx.response_length],
-        RESPONSE_GOAL_RULES[ctx.response_goal],
-        AUDIENCE_RULES[ctx.audience],
-        MEMORY_RULES,
-        build_weak_topics_rule(ctx.weak_topics),
-        TOOL_RULES,
-        DISPLAY_RULES,
-    ]
+    TEACHING_MODE_RULES[ctx.teaching_mode],
+    EVIDENCE_RULES[ctx.source],
+    STUDENT_LEVEL_RULES[ctx.student_level],
+    RESPONSE_LENGTH_RULES[ctx.response_length],
+    RESPONSE_GOAL_RULES[ctx.response_goal],
+    AUDIENCE_RULES[ctx.audience],
+    build_weak_topics_rule(ctx.weak_topics),
+    DISPLAY_RULES,
+]
     variable_text = "\n\n".join(rule for rule in variable_rules if rule)
     return BASE_PROMPT, variable_text
 
