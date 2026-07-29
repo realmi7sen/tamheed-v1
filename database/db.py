@@ -210,8 +210,7 @@ class TamheedDB:
             conn.commit()
 
     def active_users_last_minutes(self, minutes: int = 5) -> int:
-        """عدد المستخدمين النشطين خلال آخر N دقيقة.
-        ملاحظة: user_usage صف واحد لكل مستخدم، فهذا عدد مستخدمين لا عدد طلبات."""
+        """عدد المستخدمين النشطين خلال آخر N دقيقة."""
         cutoff = datetime.now().timestamp() - minutes * 60
         with self.connection() as conn:
             row = conn.execute(
@@ -240,8 +239,13 @@ class TamheedDB:
             return row["expires_at"] if row else None
 
     def free_used_get(self, user_id: int) -> int:
-        """كم سؤال مجاني استهلك الطالب."""
+        """كم سؤال مجاني استهلك الطالب — ينشئ الصف لو ما كان موجود."""
         with self.connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO students (user_id, free_used) VALUES (?, 0)",
+                (user_id,),
+            )
+            conn.commit()
             row = conn.execute(
                 "SELECT free_used FROM students WHERE user_id = ?",
                 (user_id,),
@@ -249,8 +253,12 @@ class TamheedDB:
             return row["free_used"] if row else 0
 
     def free_used_increment(self, user_id: int) -> None:
-        """زد عداد الأسئلة المجانية بواحد."""
+        """زد عداد الأسئلة المجانية بواحد — ينشئ الصف لو ما كان موجود."""
         with self.connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO students (user_id, free_used) VALUES (?, 0)",
+                (user_id,),
+            )
             conn.execute(
                 "UPDATE students SET free_used = free_used + 1 WHERE user_id = ?",
                 (user_id,),
@@ -308,7 +316,6 @@ class TamheedDB:
                 (user_id, role, content),
             )
             conn.commit()
-
 
     def conversation_get_recent(self, user_id: int, limit: int = 2) -> list:
      with self.connection() as conn:
