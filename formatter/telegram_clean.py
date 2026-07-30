@@ -16,7 +16,7 @@ _TABLE_SEP = re.compile(r"^\s*\|?[\s:|-]+\|[\s:|-]*$", re.MULTILINE)
 
 # ===== LaTeX =====
 _MATH_DELIM = re.compile(r"\$\$?")
-_FRAC = re.compile(r"\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
+__FRAC = re.compile(r"\\[dt]?frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
 _SQRT = re.compile(r"\\sqrt\s*\{([^{}]+)\}")
 _TEXT = re.compile(r"\\text\s*\{([^{}]+)\}")
 _BOXED = re.compile(r"\\boxed\s*\{([^{}]+)\}")
@@ -26,6 +26,7 @@ _SPACING = re.compile(r"\\[,;:! ]|\\quad|\\qquad")
 _SIMPLE_FRAC = re.compile(r"\((\d+)\)/\((\d+)\)")
 _BOUNDS = re.compile(r"_\{([^{}]+)\}\s*\^\{([^{}]+)\}")
 _LONE_SUBSUP = re.compile(r"[_^]\{([^{}]+)\}")
+_BARE_SUB = re.compile(r"_(\d+|[a-zA-Z])")
 _POWER = re.compile(r"\^(\d)")
 _SUPERSCRIPT = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"}
 
@@ -96,6 +97,7 @@ def _clean_latex(text: str) -> str:
     text = _SIMPLE_FRAC.sub(r"\1/\2", text)
     text = _BOUNDS.sub(r" من \1 إلى \2 ", text)
     text = _LONE_SUBSUP.sub(r"(\1)", text)
+    text = _BARE_SUB.sub(r"(\1)", text)
     text = _POWER.sub(lambda m: _SUPERSCRIPT[m.group(1)], text)
     text = re.sub(r"\\[a-zA-Z]+", "", text)
     return text
