@@ -5,6 +5,7 @@ from anthropic import AsyncAnthropic
 from utils.errors import LLMTimeoutError
 from utils.types import ResponseLength
 import os
+
 DEBUG = os.environ.get("DEBUG") == "1"
 MODEL_NAME = "claude-haiku-4-5-20251001"
 REQUEST_TIMEOUT = 60.0
@@ -41,8 +42,17 @@ class TamheedLLMClient:
             {"type": "text", "text": base_prompt},
             {"type": "text", "text": variable_prompt},
         ]
-        
-        print(f"[CACHE] enable={enable_cache} keys={list(system_blocks[0].keys())} len={len(base_prompt)}", flush=True)
+        if enable_cache:
+            # الكاش على الكتلة الثابتة فقط — variable_prompt يتغير كل سؤال
+            system_blocks[0]["cache_control"] = {"type": "ephemeral"}
+
+        if DEBUG:
+            print(
+                f"[CACHE] enable={enable_cache} "
+                f"keys={list(system_blocks[0].keys())} "
+                f"len={len(base_prompt)}",
+                flush=True,
+            )
 
         try:
             message = await asyncio.wait_for(
