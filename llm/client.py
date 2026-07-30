@@ -41,9 +41,8 @@ class TamheedLLMClient:
             {"type": "text", "text": base_prompt},
             {"type": "text", "text": variable_prompt},
         ]
-        if enable_cache:
-            # الكاش على الكتلة الثابتة فقط — variable_prompt يتغير كل سؤال
-            system_blocks[0]["cache_control"] = {"type": "ephemeral"}
+        
+        print(f"[CACHE] enable={enable_cache} keys={list(system_blocks[0].keys())} len={len(base_prompt)}", flush=True)
 
         try:
             message = await asyncio.wait_for(
