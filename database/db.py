@@ -230,15 +230,7 @@ class TamheedDB:
                 )
             conn.commit()
 
-    def active_users_last_minutes(self, minutes: int = 5) -> int:
-        """عدد المستخدمين النشطين خلال آخر N دقيقة."""
-        cutoff = datetime.now().timestamp() - minutes * 60
-        with self.connection() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM user_usage WHERE last_message_ts >= ?",
-                (cutoff,),
-            ).fetchone()
-            return row[0] if row else 0
+
 
     # ===== ACCESS: subscription + free counter =====
     def is_subscribed(self, user_id: int) -> bool:
