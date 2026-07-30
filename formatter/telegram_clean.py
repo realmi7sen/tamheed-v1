@@ -91,7 +91,11 @@ def _clean_latex(text: str) -> str:
     text = _MATH_DELIM.sub("", text)
     text = _MATH_DELIM.sub("", text)
     text = _SIMPLE_FRAC.sub(r"\1/\2", text)
+    text = _SIMPLE_FRAC.sub(r"\1/\2", text)
+    text = _BOUNDS.sub(r" من \1 إلى \2 ", text)
+    text = _LONE_SUBSUP.sub(r"(\1)", text)
     text = _POWER.sub(lambda m: _SUPERSCRIPT[m.group(1)], text)
+    text = re.sub(r"\\[a-zA-Z]+", "", text)
     return text
 
 
