@@ -24,6 +24,8 @@ _FUNCS = re.compile(r"\\(ln|log|sin|cos|tan|csc|sec|cot|arcsin|arccos|arctan|lim
 _LEFTRIGHT = re.compile(r"\\(left|right)")
 _SPACING = re.compile(r"\\[,;:! ]|\\quad|\\qquad")
 _SIMPLE_FRAC = re.compile(r"\((\d+)\)/\((\d+)\)")
+_BOUNDS = re.compile(r"_\{([^{}]+)\}\s*\^\{([^{}]+)\}")
+_LONE_SUBSUP = re.compile(r"[_^]\{([^{}]+)\}")
 _POWER = re.compile(r"\^(\d)")
 _SUPERSCRIPT = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"}
 
