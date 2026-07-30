@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 PROJECT_DIR = Path(__file__).resolve().parent
 load_dotenv(PROJECT_DIR / ".env")
-from prompts.base import BASE_PROMPT
+from prompts.base import BASE_PROMPT, check_cacheable, _MIN_CACHEABLE
 
 
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
@@ -31,6 +31,8 @@ def create_application():
     if not telegram_token:
         raise RuntimeError("TELEGRAM_TOKEN is missing. Check the .env file.")
 
+    ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
+
     project_root = PROJECT_DIR
     knowledge_service = KnowledgeService(
         persist_dir=project_root / "Knowledge_Base" / "Math106_index",
@@ -50,8 +52,29 @@ def create_application():
         cache=ResponseCache(),
         rate_limiter=rate_limiter,
     )
+
+    async def post_init(application):
+        n, ok = check_cacheable()
+        if n is None:
+            return
+        print(f"[BOOT] BASE_PROMPT = {n} tokens (cache floor {_MIN_CACHEABLE})")
+        if ok:
+            return
+        msg = (
+            f"⚠️ BASE_PROMPT dropped to {n} tokens — below the "
+            f"{_MIN_CACHEABLE} cache floor. Prompt caching is OFF. "
+            f"Cost per question is roughly 2.5x. Revert the last edit to "
+            f"prompts/base.py or pad it back above {_MIN_CACHEABLE + _SAFETY}."
+        )
+        print(msg)
+        if ADMIN_CHAT_ID:
+            try:
+                await application.bot.send_message(chat_id=ADMIN_CHAT_ID, text=msg)
+            except Exception:
+                pass
+
     #commands wither it's by the admin or the user
-    app = ApplicationBuilder().token(telegram_token).build()
+    app = ApplicationBuilder().token(telegram_token).post_init(post_init).build()
     app.add_handler(CommandHandler("start", GreetingHandler.start))
     app.add_handler(CommandHandler("new", handler.clear_memory))
     app.add_handler(CommandHandler("stats", admin_handler.stats))
@@ -60,8 +83,6 @@ def create_application():
     app.add_handler(CommandHandler("redeem", handler.redeem))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler.handle))
     app.add_handler(MessageHandler(filters.VOICE | filters.PHOTO | filters.Document.ALL | filters.VIDEO, handler.handle_media))
-
-    ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
 
     async def error_handler(update, context):
         print(f"Error: {context.error}")

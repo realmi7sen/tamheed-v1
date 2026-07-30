@@ -138,3 +138,21 @@ BASE_PROMPT = "\n\n".join([
     MATH_106_CHEAT_SHEET,
     TECHNIQUE_GUIDE
 ])
+
+
+_MIN_CACHEABLE = 4096
+_SAFETY = 300
+
+
+def check_cacheable():
+    """Returns (token_count, ok). Never raises."""
+    try:
+        from anthropic import Anthropic
+        n = Anthropic().messages.count_tokens(
+            model="claude-haiku-4-5-20251001",
+            system=[{"type": "text", "text": BASE_PROMPT}],
+            messages=[{"role": "user", "content": "x"}],
+        ).input_tokens
+        return n, n >= _MIN_CACHEABLE + _SAFETY
+    except Exception:
+        return None, True  # network failure must not block boot
