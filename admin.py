@@ -48,6 +48,13 @@ def _one(conn, sql, default=0):
         return default
 
 
+def _md_safe(text: str) -> str:
+    """شيل رموز Markdown من نص الطالب — تكسر parse_mode وتوقع /stats."""
+    for ch in ("_", "*", "[", "]", "`"):
+        text = text.replace(ch, "")
+    return text
+
+
 def _collect(db_path: str) -> dict:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -108,6 +115,27 @@ def _collect(db_path: str) -> dict:
             GROUP BY media_type ORDER BY n DESC
         """),
         "followups": _one(conn, "SELECT COUNT(*) FROM student_signals WHERE was_followup=1"),
+
+        # ===== QUESTION LOG (instrumentation) =====
+        "q_logged": _one(conn, "SELECT COUNT(*) FROM question_log"),
+        "q_per_day": _one(conn, """
+            SELECT ROUND(AVG(daily_count),2) FROM (
+                SELECT user_id, DATE(ts) AS day, COUNT(*) AS daily_count
+                FROM question_log GROUP BY user_id, day
+            )
+        """),
+        "q_daily": _rows(conn, """
+            SELECT DATE(ts, '+3 hours') day, COUNT(*) n,
+                   COUNT(DISTINCT user_id) students
+            FROM question_log GROUP BY day ORDER BY day DESC LIMIT 14
+        """),
+        "repeated": _rows(conn, """
+            SELECT normalized_text, COUNT(*) AS freq
+            FROM question_log
+            GROUP BY normalized_text
+            HAVING freq > 1
+            ORDER BY freq DESC LIMIT 15
+        """),
     }
     conn.close()
     return data
@@ -129,6 +157,9 @@ def _text_summary(d: dict) -> str:
         f"متوسط درجة الاسترجاع: {d['avg_score']}",
         f"نسبة عدم المطابقة: {d['miss_rate']}%",
         f"أسئلة متابعة مرصودة: {d['followups']}",
+        "",
+        f"📈 أسئلة مسجّلة: {d['q_logged']}",
+        f"متوسط الأسئلة/طالب/يوم: {d['q_per_day']}",
     ]
 
     if d["topics"]:
@@ -145,6 +176,12 @@ def _text_summary(d: dict) -> str:
         lines += ["", "*محاولات وسائط:*"]
         for m in d["media"]:
             lines.append(f"  {m['n']} — {m['media_type']}")
+
+    if d["repeated"]:
+        lines += ["", "*أسئلة متكررة:*"]
+        for q in d["repeated"][:8]:
+            text = _md_safe(q["normalized_text"])[:45]
+            lines.append(f"  {q['freq']}× — {text}")
 
     lines += ["", "_للتقرير الكامل: /dashboard_"]
     return "\n".join(lines)
@@ -206,6 +243,20 @@ def _html(d: dict) -> str:
         f'<td class="barcell">{_bar(x["n"], day_max, "#5fc9a0")}</td></tr>'
         for x in d["daily"]
     ) or empty(3)
+
+    qday_max = max([x["n"] for x in d["q_daily"]], default=1)
+    q_daily = "".join(
+        f'<tr><td class="mono">{x["day"]}</td><td class="num">{x["n"]}</td>'
+        f'<td class="num">{x["students"]}</td>'
+        f'<td class="num">{round(x["n"]/x["students"], 1) if x["students"] else 0}</td>'
+        f'<td class="barcell">{_bar(x["n"], qday_max, "#e0a852")}</td></tr>'
+        for x in d["q_daily"]
+    ) or empty(5)
+
+    repeated = "".join(
+        f'<tr><td>{q["normalized_text"][:90]}</td><td class="num">{q["freq"]}</td></tr>'
+        for q in d["repeated"]
+    ) or empty(2)
 
     students = "".join(
         f'<tr><td>{s["first_name"] or "-"}</td>'
@@ -278,7 +329,18 @@ padding-top:9px;border-top:1px solid var(--border)}}
 <div class="card"><div class="label">متوسط الاسترجاع</div>
 <div class="value" style="color:{_color(d['avg_score'])}">{d['avg_score']}</div></div>
 <div class="card"><div class="label">نسبة عدم المطابقة</div><div class="value">{d['miss_rate']}%</div></div>
+<div class="card"><div class="label">أسئلة/طالب/يوم</div><div class="value">{d['q_per_day']}</div></div>
+<div class="card"><div class="label">أسئلة مسجّلة</div><div class="value">{d['q_logged']}</div></div>
 </div>
+
+<section><h2>الأسئلة لكل طالب في اليوم</h2>
+<table><tr><th>اليوم</th><th class="num">أسئلة</th><th class="num">طلاب</th>
+<th class="num">المعدل</th><th></th></tr>{q_daily}</table>
+<div class="note">هذا هو الرقم الوحيد الناقص في نموذج التكلفة. المعدل = أسئلة ÷ طلاب نشطين ذلك اليوم.</div></section>
+
+<section><h2>الأسئلة المتكررة</h2>
+<table><tr><th>السؤال (بعد التطبيع)</th><th class="num">التكرار</th></tr>{repeated}</table>
+<div class="note">أي سؤال يتكرر ٥ مرات أو أكثر = مرشح للرد الجاهز بتكلفة صفر.</div></section>
 
 <section><h2>توزيع درجات الاسترجاع</h2>
 <table><tr><th>النطاق</th><th class="num">العدد</th><th></th></tr>{bands}</table>
