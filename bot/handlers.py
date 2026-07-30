@@ -243,6 +243,12 @@ class TamheedMessageHandler:
         if self._is_free_user(user_id):
             self.db.free_used_increment(user_id)
 
+        # سجّل السؤال للقياس — بعد نجاح الرد فقط، وبدون الأدمن
+        if not (ADMIN_ID_INT is not None and user_id == ADMIN_ID_INT):
+            self.db.log_question(user_id, user_message)
+
+        
+
         self.db.signal_add(
             user_id=user_id,
             topic=prompt_context.technique_name or "",

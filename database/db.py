@@ -5,6 +5,15 @@ import hashlib
 from typing import Optional
 from datetime import datetime
 import os
+import re
+def normalize_question(text: str) -> str:
+    """طبّع نص السؤال — للمقارنة والتكرار، مو للعرض."""
+    text = text.strip().lower()
+    text = re.sub(r'[\u064B-\u0652\u0670\u0640]', '', text)  # tashkeel
+    text = re.sub(r'[إأآا]', 'ا', text)
+    text = re.sub(r'ى', 'ي', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text
 
 class TamheedDB:
     """طبقة قاعدة البيانات SQLite — كاش، استخدام يومي، محادثات، اشتراكات."""
@@ -103,6 +112,18 @@ class TamheedDB:
                     code_used TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS question_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    normalized_text TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_question_log_user
+                ON question_log (user_id, ts)
             """)
 
             # migration: أضف free_used لجدول students القديم لو ما كان موجود
@@ -306,6 +327,53 @@ class TamheedDB:
                 (code,),
             )
             conn.commit()
+            
+    # ===== QUESTION LOG =====
+    def log_question(self, user_id: int, raw_text: str) -> None:
+        """سجّل سؤال بعد جواب ناجح فقط — لقياس التكرار والمعدل اليومي."""
+        normalized = normalize_question(raw_text)
+        with self.connection() as conn:
+            conn.execute(
+                "INSERT INTO question_log (user_id, normalized_text) VALUES (?, ?)",
+                (user_id, normalized),
+            )
+            conn.commit()
+            
+            
+    def questions_per_day_avg(self) -> float:
+        """متوسط الأسئلة لكل طالب في اليوم — يحسب فقط الأيام اللي سأل فيها."""
+        with self.connection() as conn:
+            row = conn.execute("""
+                SELECT AVG(daily_count) AS avg_count FROM (
+                    SELECT user_id, DATE(ts) AS day, COUNT(*) AS daily_count
+                    FROM question_log GROUP BY user_id, day
+                )
+            """).fetchone()
+            return round(row["avg_count"], 2) if row and row["avg_count"] else 0.0
+
+    def questions_per_day_breakdown(self, limit: int = 20) -> list:
+        """تفصيل: كل طالب، كل يوم، كم سأل."""
+        with self.connection() as conn:
+            rows = conn.execute("""
+                SELECT user_id, DATE(ts) AS day, COUNT(*) AS daily_count
+                FROM question_log
+                GROUP BY user_id, day
+                ORDER BY day DESC, daily_count DESC
+                LIMIT ?
+            """, (limit,)).fetchall()
+            return [dict(r) for r in rows]
+
+    def top_repeated_questions(self, limit: int = 30) -> list:
+        """أكثر الأسئلة تكراراً — أساس الـ FAQ cache لاحقاً (§6.4)."""
+        with self.connection() as conn:
+            rows = conn.execute("""
+                SELECT normalized_text, COUNT(*) AS freq
+                FROM question_log
+                GROUP BY normalized_text
+                ORDER BY freq DESC
+                LIMIT ?
+            """, (limit,)).fetchall()
+            return [dict(r) for r in rows]
 
     # ===== CONVERSATIONS (الذاكرة) =====
     def conversation_add(self, user_id: int, role: str, content: str) -> None:
