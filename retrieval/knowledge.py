@@ -63,7 +63,7 @@ class KnowledgeService:
             context_parts = [top.text]
 
     # Only include nearby chunks when confidence is lower.
-            for n in valid[1:3]:
+            for n in valid[1:2]:
                n_score = float(getattr(n, "score", 0) or 0)
 
             if (
