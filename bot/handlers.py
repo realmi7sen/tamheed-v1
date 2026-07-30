@@ -355,10 +355,7 @@ class TamheedMessageHandler:
          if cached is not None:
             return cached
 
-        enable_cache = (
-            self.db.active_users_last_minutes(CACHE_WINDOW_MINUTES)
-            >= CACHE_THRESHOLD_USERS
-        )
+        enable_cache = True
 
 
         reply = await self.llm.generate(
