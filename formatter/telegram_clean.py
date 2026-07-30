@@ -16,7 +16,7 @@ _TABLE_SEP = re.compile(r"^\s*\|?[\s:|-]+\|[\s:|-]*$", re.MULTILINE)
 
 # ===== LaTeX =====
 _MATH_DELIM = re.compile(r"\$\$?")
-__FRAC = re.compile(r"\\[dt]?frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
+_FRAC = re.compile(r"\\[dt]?frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
 _SQRT = re.compile(r"\\sqrt\s*\{([^{}]+)\}")
 _TEXT = re.compile(r"\\text\s*\{([^{}]+)\}")
 _BOXED = re.compile(r"\\boxed\s*\{([^{}]+)\}")
@@ -82,23 +82,24 @@ _DIALECT_PATTERN = re.compile(
 
 
 def _clean_latex(text: str) -> str:
+    # مرتين: الـ frac المتداخل مثل \frac{d}{dx} داخل frac آخر
+    text = _FRAC.sub(r"(\1)/(\2)", text)
     text = _FRAC.sub(r"(\1)/(\2)", text)
     text = _SQRT.sub(r"√(\1)", text)
     text = _TEXT.sub(r"\1", text)
-    text = _BOXED.sub(r"\1", text)          
+    text = _BOXED.sub(r"\1", text)
     text = _FUNCS.sub(r"\1", text)
     text = _LEFTRIGHT.sub("", text)
     for latex, symbol in _LATEX_SYMBOLS.items():
         text = text.replace(latex, symbol)
     text = _SPACING.sub(" ", text)
     text = _MATH_DELIM.sub("", text)
-    text = _MATH_DELIM.sub("", text)
-    text = _SIMPLE_FRAC.sub(r"\1/\2", text)
     text = _SIMPLE_FRAC.sub(r"\1/\2", text)
     text = _BOUNDS.sub(r" من \1 إلى \2 ", text)
     text = _LONE_SUBSUP.sub(r"(\1)", text)
     text = _BARE_SUB.sub(r"(\1)", text)
     text = _POWER.sub(lambda m: _SUPERSCRIPT[m.group(1)], text)
+    # شبكة أمان: أي أمر LaTeX باقٍ يُحذف — لازم يكون آخر شي
     text = re.sub(r"\\[a-zA-Z]+", "", text)
     return text
 
