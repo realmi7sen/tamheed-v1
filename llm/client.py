@@ -37,14 +37,14 @@ class TamheedLLMClient:
         # ===============================
         # Build system prompt
         # ===============================
-        base_block = {"type": "text", "text": base_prompt}
-        if enable_cache:
-            base_block["cache_control"] = {"type": "ephemeral"}
-
         system_blocks = [
-            base_block,
+            {"type": "text", "text": base_prompt},
             {"type": "text", "text": variable_prompt},
         ]
+        base_block = {"type": "text", "text": base_prompt}
+        if enable_cache:
+            # نضع الكاش على آخر كتلة ليقوم بحفظ كل ما يسبقها
+            system_blocks[-1]["cache_control"] = {"type": "ephemeral"}
 
         try:
             message = await asyncio.wait_for(

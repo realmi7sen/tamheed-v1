@@ -42,8 +42,7 @@ class KnowledgeService:
         top = valid[0] if valid else None
         score = float(getattr(top, "score", 0) or 0) if top else 0.0
         
-        if DEBUG:
-         print(f"[RETRIEVAL] nodes={len(nodes)} valid={len(valid)} score={score:.3f}")
+        
         
 
         if not top or score < MATCH_THRESHOLD:
@@ -54,11 +53,31 @@ class KnowledgeService:
             )
 
         # ضم النتائج القريبة من الأفضل (فرق ≤ 0.05) كسياق إضافي — بحد أقصى نتيجتين إضافيتين
-        context_parts = [top.text]
-        for n in valid[1:3]:
-            n_score = float(getattr(n, "score", 0) or 0)
-            if n_score >= MATCH_THRESHOLD and (score - n_score) <= 0.03:
-                context_parts.append(n.text)
+        
+        # If the best match is extremely confident,
+# don't waste tokens sending additional chunks.
+        if score >= 0.85:
+           context_parts = [top.text]
+
+        else:
+            context_parts = [top.text]
+
+    # Only include nearby chunks when confidence is lower.
+            for n in valid[1:3]:
+               n_score = float(getattr(n, "score", 0) or 0)
+
+            if (
+            n_score >= MATCH_THRESHOLD
+            and (score - n_score) <= 0.03
+            ):
+              context_parts.append(n.text)
+            
+            
+            if DEBUG:
+                 print(f"[RETRIEVAL] nodes={len(nodes)} valid={len(valid)} score={score:.3f}",flush=True,)
+                 print(f"[CONTEXT] chunks={len(context_parts)}",flush=True,)
+            
+            
 
         source = (
             SourceType.MATCHED_SOLUTION

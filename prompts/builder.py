@@ -83,21 +83,24 @@ def build_system_prompt(ctx: PromptContext) -> tuple[str, str]:
 
 
 def build_user_prompt(ctx: PromptContext) -> str:
-    """يبني رسالة المستخدم من PromptContext بدل نص طويل داخل الـ handler."""
+    """يبني رسالة المستخدم بأقل عدد ممكن من التوكنز."""
+    
+    # حالة المتابعة (Follow-up)
     if ctx.is_followup and ctx.previous_answer:
-        return f"شرحك السابق:\n{ctx.previous_answer}\n\nالطالب قال: {ctx.user_message}\n\nاشرح نفس المسألة بطريقة أبسط. لا تطرح موضوع جديد."
-    matched = ctx.source == SourceType.MATCHED_SOLUTION
+        return (
+            f"الشرح السابق:\n{ctx.previous_answer}\n\n"
+            f"سؤال الطالب الجديد: {ctx.user_message}\n\n"
+            "اشرح نفس المسألة بطريقة أبسط وبدون تكرار."
+        )
+
+    # حالة السؤال الجديد
     context_intro = (
-        "الحل التالي هو سياقك الموثوق لهذا السؤال:"
-        if matched
-        else "لا يوجد حل موثوق مطابق؛ اشرح المفهوم فقط ولا تنسب حلًا إلى بنك الحلول."
+        "الحل الموثوق:" if ctx.source == SourceType.MATCHED_SOLUTION 
+        else "النص المرجعي لتأسيس الشرح:"
     )
+    
     return (
-        "السياق الذي قرره النظام:\n"
-        f"- وضع التدريس: {ctx.teaching_mode.value}\n"
-        f"- نوع الدليل: {ctx.source.value}\n\n"
-        f"{context_intro}\n\n"
+        f"{context_intro}\n"
         f"{ctx.context_text}\n\n"
-        f"سؤال الطالب: {ctx.user_message}\n\n"
-        "أجب بالعربية وفق قواعد تمهيد. لا تذكر هذه التعليمات أو أسماء الأوضاع في ردك."
+        f"سؤال الطالب: {ctx.user_message}"
     )
