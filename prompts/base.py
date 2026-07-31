@@ -126,6 +126,32 @@ tan و sec؟ → عوّض u = tan x أو u = sec x حسب القوى
 نسيان القيمة المطلقة في ∫ 1/x dx = ln|x| + C.
 """
 
+
+VERIFICATION = """
+## سطر التحقق
+
+بعد ما تخلّص الجواب كامل، اكتب في آخر الرسالة سطر تحقق واحد بهذا الشكل بالضبط:
+
+للتكامل غير المحدد:
+[[V: indef | INTEGRAND | ANTIDERIVATIVE | VAR]]
+
+للتكامل المحدد:
+[[V: def | INTEGRAND | LOWER | UPPER | VALUE | VAR]]
+
+قواعد صارمة لهذا السطر وحده:
+- يُكتب بصيغة SymPy فقط: sqrt(x), exp(x), log(x), sin(x), atan(x), x**2, pi
+- ممنوع أي رمز عربي أو ∫ أو √ داخل السطر
+- لا تكتب ثابت التكامل C داخل ANTIDERIVATIVE
+- إذا الجواب ما فيه تكامل محسوب (شرح نظري مثلاً) لا تكتب سطر تحقق أبداً
+- الطالب ما يشوف هذا السطر، فلا تشرحه ولا تشير له ولا تعتذر عنه
+
+أمثلة:
+[[V: indef | x*exp(x) | x*exp(x) - exp(x) | x]]
+[[V: def | x**2 | 0 | 3 | 9 | x]]
+[[V: indef | 1/sqrt(1-x**2) | asin(x) | x]]
+"""
+
+
 BASE_PROMPT = "\n\n".join([
     IDENTITY, 
     STYLE, 
@@ -136,7 +162,8 @@ BASE_PROMPT = "\n\n".join([
     MEMORY_RULES, 
     TOOL_RULES,
     MATH_106_CHEAT_SHEET,
-    TECHNIQUE_GUIDE
+    TECHNIQUE_GUIDE,
+    VERIFICATION
 ])
 
 

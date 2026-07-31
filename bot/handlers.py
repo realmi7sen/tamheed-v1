@@ -8,6 +8,7 @@ from database.student_profile import StudentProfileService
 from formatter.response import ResponseFormatter
 from limits.service import RateLimiter
 from llm.client import TamheedLLMClient
+from math_verify.verifier import verify_response
 from memory.service import MemoryService
 from prompts.builder import build_system_prompt, build_user_prompt
 from prompts.selectors import (
@@ -38,6 +39,10 @@ MEMORY_WINDOW_CHARS = 1000
 FREE_QUESTION_LIMIT = 5   # أسئلة مجانية مدى الحياة لأي شخص
 # تاريخ انتهاء الاشتراك — آخر الترم. عدّلها للتاريخ الحقيقي.
 SUBSCRIPTION_EXPIRES_AT = "2026-12-31 23:59:59"
+
+# ===== CAS VERIFICATION =====
+# يُلحق بالجواب إذا فشل التحقق الرياضي مرتين. غيّره لـ "" لتعطيل التنبيه للطالب.
+VERIFY_CAVEAT = "\n\n⚠️ راجع الخطوة الأخيرة بنفسك، ما أنا متأكد ١٠٠٪ من الناتج."
 
 SUBSCRIBE_MESSAGE = (
     "خلصت أسئلتك المجانية (٥ أسئلة) 🎓\n"
@@ -108,6 +113,14 @@ class TamheedMessageHandler:
                 chat_id=ADMIN_CHAT_ID,
                 text=f"⚠️ {kind}:\n{error}",
             )
+        except Exception:
+            pass
+
+    async def _notify_admin_text(self, context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
+        if not ADMIN_CHAT_ID:
+            return
+        try:
+            await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
         except Exception:
             pass
 
@@ -213,7 +226,7 @@ class TamheedMessageHandler:
             prompt_context = await self._build_prompt_context(
                 user_id, user_message
             )
-            reply = await self._generate(
+            reply, verify_status, verify_details = await self._generate(
                 prompt_context, user_id=user_id, use_memory=use_memory
             )
         except RetrievalError as error:
@@ -236,6 +249,20 @@ class TamheedMessageHandler:
             print(f"AnthropicError: {error}")
             await self._notify_admin(context, error, "AnthropicError")
             return
+
+        # ===== نتيجة التحقق الرياضي =====
+        if DEBUG:
+            print(f"[VERIFY] {verify_status} | {verify_details}")
+
+        if verify_status == "failed":
+            reply = reply + VERIFY_CAVEAT
+            await self._notify_admin_text(
+                context,
+                "🔴 فشل التحقق الرياضي بعد إعادة المحاولة\n"
+                f"user_id: {user_id}\n"
+                f"السؤال: {user_message[:200]}\n"
+                f"التفاصيل: {verify_details}",
+            )
 
         self.limiter.record(user_id)
 
@@ -335,7 +362,11 @@ class TamheedMessageHandler:
 
     async def _generate(
         self, ctx: PromptContext, user_id: int, use_memory: bool
-    ) -> str:
+    ) -> tuple[str, str, list]:
+        """
+        يرجع (النص النظيف، حالة التحقق، تفاصيل التحقق).
+        النص المُرجَع دائماً بدون سطر [[V:...]] — آمن للإرسال وللتخزين في الكاش.
+        """
         base_prompt, variable_prompt = build_system_prompt(ctx)
         user_prompt = build_user_prompt(ctx)
 
@@ -353,12 +384,13 @@ class TamheedMessageHandler:
          cache_key = self.cache.make_key(base_prompt + variable_prompt, user_prompt)
          cached = self.cache.get(cache_key)
          if cached is not None:
-            return cached
+            # المخزَّن نظيف ومتحقَّق منه أصلاً
+            return cached, "cached", ["from response cache"]
 
         enable_cache = True
 
 
-        reply = await self.llm.generate(
+        raw = await self.llm.generate(
             base_prompt=base_prompt,
             variable_prompt=variable_prompt,
             user_prompt=user_prompt,
@@ -367,8 +399,36 @@ class TamheedMessageHandler:
             enable_cache=enable_cache,
         )
 
-        if not use_memory:
-            self.cache.set(cache_key, reply)
-        return reply
-    
-    
+        clean, status, details = verify_response(raw)
+
+        # محاولة واحدة لإعادة التوليد إذا كان الناتج خاطئاً رياضياً
+        if status == "failed":
+            if DEBUG:
+                print(f"[VERIFY] first attempt failed: {details} — retrying")
+            retry_prompt = (
+                f"{user_prompt}\n\n"
+                "تنبيه داخلي: المحاولة السابقة كانت خاطئة رياضياً. "
+                "أعد الحل من البداية بخطوات دقيقة، وتحقق من الناتج بالاشتقاق "
+                "قبل ما تكتبه. لا تشير لهذا التنبيه في جوابك."
+            )
+            raw_retry = await self.llm.generate(
+                base_prompt=base_prompt,
+                variable_prompt=variable_prompt,
+                user_prompt=retry_prompt,
+                response_length=ctx.response_length,
+                history=history,
+                enable_cache=enable_cache,
+            )
+            clean_retry, status_retry, details_retry = verify_response(raw_retry)
+            if status_retry != "failed":
+                clean, status, details = clean_retry, status_retry, details_retry
+            else:
+                clean = clean_retry
+                status = "failed"
+                details = details + ["retry: "] + details_retry
+
+        # لا نخزّن في الكاش إلا ما هو غير مؤكَّد الخطأ
+        if not use_memory and status != "failed":
+            self.cache.set(cache_key, clean)
+
+        return clean, status, details
